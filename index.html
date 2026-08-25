@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ja" class="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>動画制作 未作成アラート ダッシュボード</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+if (window.tailwind) tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: { sans: ['"Noto Sans JP"', 'system-ui', '-apple-system', 'sans-serif'] },
+      colors: {
+        good:     '#0ca30c',
+        warning:  '#fab219',
+        serious:  '#ec835a',
+        critical: '#d03b3b',
+        brand:    '#2a78d6'
+      }
+    }
+  }
+};
+</script>
+
+<style>
+  /* チャート／ステータス用のカラーロール（ライト・ダーク両対応） */
+  :root{
+    --surface-1:#ffffff; --plane:#f6f7f9;
+    --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+    --hairline:#e3e5ea; --bar:#2a78d6; --bar-track:#eceef3;
+    --c-good:#0ca30c; --c-warning:#fab219; --c-serious:#ec835a; --c-critical:#d03b3b;
+  }
+  .dark{
+    --surface-1:#1a1a19; --plane:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --hairline:#2c2c2a; --bar:#3987e5; --bar-track:#232322;
+    --c-good:#0ca30c; --c-warning:#fab219; --c-serious:#ec835a; --c-critical:#d03b3b;
+  }
+  body{ background:var(--plane); color:var(--ink-1); }
+  .card-surface{ background:var(--surface-1); border-color:var(--hairline); }
+  .ink-2{ color:var(--ink-2); } .ink-3{ color:var(--ink-3); }
+  .hair{ border-color:var(--hairline); }
+  .tnum{ font-variant-numeric:tabular-nums; }
+
+  /* 緊急度：色だけに意味を持たせず、必ずラベル＋アイコンとセットで使う */
+  .u-over  { color:#fff; background:var(--c-critical); }
+  .u-3     { color:var(--c-critical); background:color-mix(in srgb, var(--c-critical) 14%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c-critical) 45%, transparent); }
+  .u-7     { color:#7a5a06; background:color-mix(in srgb, var(--c-warning) 26%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c-warning) 60%, transparent); }
+  .dark .u-7 { color:var(--c-warning); }
+  .u-14    { color:var(--ink-2); background:var(--bar-track); box-shadow:inset 0 0 0 1px var(--hairline); }
+  .stripe-over{ background:var(--c-critical); }
+  .stripe-3   { background:var(--c-critical); }
+  .stripe-7   { background:var(--c-warning); }
+  .stripe-14  { background:var(--ink-3); }
+
+  .bar-track{ background:var(--bar-track); }
+  .bar-fill{ background:var(--bar); border-radius:0 4px 4px 0; }
+
+  input:focus-visible, select:focus-visible, button:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--bar); outline-offset:2px;
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+
+<body class="font-sans antialiased">
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 pb-24">
+
+  <!-- ============ ヘッダー ============ -->
+  <header class="pt-8 pb-5 flex flex-wrap items-end gap-4 border-b hair">
+    <div class="flex-1 min-w-[260px]">
+      <p class="text-[11px] tracking-[0.18em] uppercase ink-3 font-medium">Video production · alert board</p>
+      <h1 class="text-2xl sm:text-3xl font-bold mt-1 leading-tight">未作成アラート ダッシュボード</h1>
+      <p class="text-sm ink-2 mt-1">スプレッドシートの進捗表を貼り付けると、期間内に投稿予定で未完了の案件だけを抽出します。</p>
+    </div>
+    <div class="flex items-end gap-2">
+      <label class="text-xs ink-2">
+        <span class="block mb-1">基準日</span>
+        <input id="baseDate" type="date" class="card-surface border rounded-lg px-3 py-2 text-sm tnum">
+      </label>
+      <button id="themeBtn" type="button" title="表示モードを切り替え"
+        class="card-surface border rounded-lg px-3 py-2 text-sm hover:opacity-80">🌓</button>
+    </div>
+  </header>
+
+  <!-- ============ 入力エリア ============ -->
+  <section id="inputSection" class="mt-6 card-surface border rounded-xl p-4 sm:p-5">
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+      <h2 class="font-bold">1. 進捗データを貼り付け</h2>
+      <span class="text-xs ink-3">スプレッドシートで範囲選択 → コピー → 下の枠に貼り付け（TSV／CSV 対応）</span>
+      <div class="ml-auto flex gap-2">
+        <button id="sampleBtn" type="button" class="text-xs px-3 py-1.5 rounded-lg border hair ink-2 hover:opacity-70">サンプルを入れる</button>
+        <button id="clearBtn"  type="button" class="text-xs px-3 py-1.5 rounded-lg border hair ink-2 hover:opacity-70">クリア</button>
+      </div>
+    </div>
+
+    <textarea id="raw" rows="7" spellcheck="false"
+      class="w-full card-surface border rounded-lg p-3 text-xs font-mono leading-relaxed resize-y"
+      placeholder="ここにスプレッドシートのデータを貼り付けてください（ヘッダー行の「投稿日」を目印に自動で列を判定します）"></textarea>
+
+    <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ink-2">
+      <label class="flex items-center gap-1.5">
+        <span>抽出期間</span>
+        <select id="rangeDays" class="card-surface border rounded-lg px-2 py-1.5">
+          <option value="7">7日以内</option>
+          <option value="14" selected>14日以内（2週間）</option>
+          <option value="30">30日以内</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <input id="incOverdue" type="checkbox" checked class="rounded"><span>期限超過（過去30日）も含める</span>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <input id="dirDone" type="checkbox" class="rounded"><span>「ディレクター送信済み」を完了とみなす</span>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <input id="incBlank" type="checkbox" checked class="rounded"><span>ステータス空欄を「未作成」として扱う</span>
+      </label>
+    </div>
+
+    <details class="mt-3">
+      <summary class="text-xs ink-3 cursor-pointer select-none hover:opacity-70">完了とみなすステータスを編集する</summary>
+      <input id="doneList" type="text"
+        class="mt-2 w-full card-surface border rounded-lg px-3 py-2 text-xs font-mono"
+        value="確認済,先方送信済み,予約済み,画像確認済み,投稿済,再投稿,先方指定動画,画像投稿,先方NG,RC側没,没">
+      <p class="text-[11px] ink-3 mt-1">カンマ区切り。部分一致で判定します（「先方NG」「没」は制作不要のため除外扱い）。</p>
+    </details>
+
+    <button id="runBtn" type="button"
+      class="mt-4 w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white text-sm"
+      style="background:var(--bar)">未作成企業を抽出する</button>
+
+    <p id="parseNote" class="mt-3 text-xs ink-3 hidden"></p>
+  </section>
+
+  <!-- ============ 結果 ============ -->
+  <main id="result" class="hidden">
+
+    <!-- KPI -->
+    <section class="mt-8">
+      <h2 class="sr-only">サマリー</h2>
+      <div id="kpis" class="grid gap-3 grid-cols-2 lg:grid-cols-4"></div>
+    </section>
+
+    <!-- チャート -->
+    <section class="mt-4 grid gap-3 lg:grid-cols-2">
+      <div class="card-surface border rounded-xl p-4">
+        <h3 class="text-sm font-bold">ステータス別の件数</h3>
+        <p class="text-[11px] ink-3 mb-3">未完了案件がどの工程で止まっているか</p>
+        <div id="chartStatus" class="space-y-2"></div>
+      </div>
+      <div class="card-surface border rounded-xl p-4">
+        <h3 class="text-sm font-bold">担当者別の残件数</h3>
+        <p class="text-[11px] ink-3 mb-3">件数の多い順・上位10名</p>
+        <div id="chartOwner" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- フィルター -->
+    <section class="mt-6 sticky top-0 z-20 py-3" style="background:var(--plane)">
+      <div class="card-surface border rounded-xl p-3 flex flex-wrap items-center gap-2">
+        <input id="fText" type="search" placeholder="企業名・コンテンツ名で検索"
+          class="card-surface border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]">
+        <select id="fOwner"  class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">担当者：すべて</option></select>
+        <select id="fStatus" class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">ステータス：すべて</option></select>
+        <select id="fUrg"    class="card-surface border rounded-lg px-3 py-2 text-sm">
+          <option value="">緊急度：すべて</option>
+          <option value="over">期限超過</option>
+          <option value="u3">3日以内</option>
+          <option value="u7">1週間以内</option>
+          <option value="u14">それ以降</option>
+        </select>
+        <select id="fSort" class="card-surface border rounded-lg px-3 py-2 text-sm">
+          <option value="date">投稿日順</option>
+          <option value="owner">担当者順</option>
+          <option value="company">企業名順</option>
+        </select>
+        <div class="ml-auto flex gap-2">
+          <button id="remindBtn" type="button" class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">リマインド文を作成</button>
+          <button id="csvBtn" type="button" class="px-3 py-2 rounded-lg text-sm border hair ink-2 hover:opacity-70">CSV書き出し</button>
+        </div>
+      </div>
+      <p id="filterNote" class="text-xs ink-3 mt-2 px-1"></p>
+    </section>
+
+    <!-- カード -->
+    <section id="cards" class="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"></section>
+    <p id="empty" class="hidden text-center ink-3 text-sm py-16">条件に合う案件はありません。</p>
+  </main>
+</div>
+
+<!-- ============ リマインド文モーダル ============ -->
+<div id="modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background:rgba(0,0,0,.5)">
+  <div class="card-surface border rounded-2xl w-full max-w-2xl max-h-[86vh] flex flex-col">
+    <div class="p-4 border-b hair flex items-center gap-3">
+      <h2 class="font-bold">リマインド文</h2>
+      <select id="mOwner" class="card-surface border rounded-lg px-3 py-1.5 text-sm ml-auto"></select>
+      <button id="mClose" type="button" class="ink-2 px-2 text-xl leading-none hover:opacity-70" aria-label="閉じる">×</button>
+    </div>
+    <textarea id="mText" class="flex-1 m-4 card-surface border rounded-lg p-3 text-sm font-mono leading-relaxed resize-none" rows="14"></textarea>
+    <div class="px-4 pb-4 flex gap-2">
+      <button id="mCopy" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">クリップボードにコピー</button>
+      <span id="mMsg" class="text-sm self-center" style="color:var(--c-good)"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   0. ユーティリティ
+   ========================================================= */
+const $  = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c; if (h != null) n.innerHTML = h; return n; };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+const DOW = '日月火水木金土';
+
+/* テーマ */
+(function initTheme(){
+  const saved = localStorage.getItem('vad-theme');
+  const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.classList.toggle('dark', dark);
+})();
+$('#themeBtn').onclick = () => {
+  const dark = !document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark', dark);
+  localStorage.setItem('vad-theme', dark ? 'dark' : 'light');
+};
+
+/* 基準日 */
+function todayMidnight(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+function toInput(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+$('#baseDate').value = toInput(todayMidnight());
+function baseDate(){
+  const v = $('#baseDate').value;
+  if (!v) return todayMidnight();
+  const [y,m,d] = v.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
+/* =========================================================
+   1. TSV / CSV パーサ（引用符・セル内改行に対応）
+   ========================================================= */
+function parseDelimited(text){
+  const head = text.slice(0, 5000);
+  const delim = head.includes('\t') ? '\t' : ',';
+  const rows = []; let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){
+      if (c === '"'){ if (text[i+1] === '"'){ field += '"'; i++; } else q = false; }
+      else field += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === delim){ row.push(field); field = ''; }
+      else if (c === '\r'){ /* skip */ }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  row.push(field); rows.push(row);
+  return rows;
+}
+
+/* =========================================================
+   2. 日付の解釈（「7月16日(木)」「2026/7/16」「7/16」）
+      曜日が一致する年を優先して年をまたぐ表を正しく読む
+   ========================================================= */
+function parseJPDate(s, base){
+  const t = String(s || '').trim();
+  if (!t) return null;
+  let mo, da;
+  const full = t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (full) return new Date(+full[1], +full[2]-1, +full[3]);
+  const jp = t.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (jp){ mo = +jp[1]; da = +jp[2]; }
+  else {
+    const sl = t.match(/^(\d{1,2})[\/\-.](\d{1,2})$/);
+    if (!sl) return null;
+    mo = +sl[1]; da = +sl[2];
+  }
+  if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+  const dowM = t.match(/[(（]\s*([日月火水木金土])\s*[)）]/);
+  const by = base.getFullYear();
+  const pick = requireDow => {
+    let best = null;
+    for (const y of [by-1, by, by+1]){
+      const d = new Date(y, mo-1, da);
+      if (d.getMonth() !== mo-1) continue;
+      if (requireDow && dowM && DOW[d.getDay()] !== dowM[1]) continue;
+      const diff = Math.abs((d - base) / 86400000);
+      if (!best || diff < best.diff) best = { d, diff };
+    }
+    return best;
+  };
+  const best = pick(true) || pick(false);
+  return best ? best.d : null;
+}
+
+/* =========================================================
+   3. ステータス判定
+   ========================================================= */
+const STATUS_GROUPS = [
+  { key:'未作成',       match:['未作成','未記入'] },
+  { key:'作成中',       match:['作成中'] },
+  { key:'素材待ち',     match:['素材作成中','素材待ち','素材なし','未撮影','素材について'] },
+  { key:'QA確認依頼中', match:['QA確認'] },
+  { key:'確認待ち',     match:['P確認待ち','優君確認待ち','動画班確認待ち','確認待ち'] },
+  { key:'送信前',       match:['ディレクター送信済み','未送信','貼り付け'] }
+];
+function groupOf(status){
+  const s = String(status || '').trim();
+  if (!s) return '未作成';
+  for (const g of STATUS_GROUPS) if (g.match.some(m => s.includes(m))) return g.key;
+  return 'その他';
+}
+function isDone(status){
+  const s = String(status || '').trim();
+  if (!s) return false;
+  if (!$('#dirDone').checked && s.includes('ディレクター送信済み')) return false;
+  return doneTerms().some(t => t && s.includes(t));
+}
+function doneTerms(){
+  const base = $('#doneList').value.split(',').map(x => x.trim()).filter(Boolean);
+  if ($('#dirDone').checked) base.push('ディレクター送信済み');
+  return base;
+}
+
+/* =========================================================
+   4. 表の解析：ヘッダー行（「投稿日」を含む行）ごとにブロック化
+   ========================================================= */
+const HEADER_WORDS = ['端末','投稿日','作成者','CT','テキストサイズ','備考','インスタ','TikTok','YouTube','RED','TOPに戻る','色・フォント','TRUE','FALSE','状態'];
+const META_LABELS  = ['基本編集','撮影','運用','P','D'];
+
+/* 「撮影＊さとあや　運用＊みえ　P＊れん」のような担当メモ行を分解する。
+   ラベルだけで値が空の場合（例：運用＊　D＊れん）は空として扱う。 */
+function parseMeta(str){
+  const out = { editor:'', ope:'', dir:'', shoot:'' };
+  const key = { '基本編集':'editor', '運用':'ope', '撮影':'shoot', 'P':'dir', 'D':'dir' };
+  const seg = String(str).split(/[＊*※]/);          // 「撮影＊◯◯　運用＊△△」を区切る
+  const tail = /(基本編集|撮影|運用|[PD])[\s　]*$/;   // 直前セグメントの末尾がラベル
+  for (let i = 0; i < seg.length - 1; i++){
+    const lm = seg[i].match(tail);
+    if (!lm) continue;
+    let v = seg[i+1].replace(tail, '')              // 次のラベルを取り除く
+      .replace(/^[\s　]+/, '')
+      .split(/[\s　\t]/)[0]
+      .replace(/[（(].*$/, '')
+      .trim();
+    if (META_LABELS.includes(v)) v = '';
+    const k = key[lm[1]];
+    if (v && !out[k]) out[k] = v;
+  }
+  return out;
+}
+
+function extractItems(rows, base){
+  const items = [];
+  let block = null, skipped = 0;
+
+  const isHeader = r => r.some(c => String(c).trim() === '投稿日');
+
+  for (const r of rows){
+    if (isHeader(r)){
+      const iDate   = r.findIndex(c => String(c).trim() === '投稿日');
+      const iDevice = r.findIndex(c => String(c).trim() === '端末');
+      const iAuthor = r.findIndex(c => String(c).trim() === '作成者');
+      const iStatus = iDevice > 0 ? iDevice - 1 : Math.max(0, iDate - 2);
+      const name = r.slice(0, iDate)
+        .map(c => String(c).trim())
+        .filter(c => c && !HEADER_WORDS.includes(c) && c.length < 80)
+        .join('／');
+      block = { name: name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'' };
+      continue;
+    }
+    if (!block) continue;
+
+    const joined = r.join(' ');
+
+    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊） */
+    if (/(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(joined)){
+      const meta = parseMeta(joined);
+      block.editor = block.editor || meta.editor;
+      block.ope    = block.ope    || meta.ope;
+      block.dir    = block.dir    || meta.dir;
+      block.shoot  = block.shoot  || meta.shoot;
+      if (!/\d+\s*月\s*\d+\s*日/.test(joined)) continue;
+    }
+
+    /* データ行 */
+    const dateRaw = (r[block.iDate] || '').trim();
+    if (!dateRaw) continue;
+    const date = parseJPDate(dateRaw, base);
+    if (!date){ skipped++; continue; }
+
+    const status = (r[block.iStatus] || '').trim();
+    let author = (block.iAuthor >= 0 ? (r[block.iAuthor] || '') : '').trim();
+    if (!author || author === 'TRUE' || author === 'FALSE'){
+      for (const k of [block.iDate + 1, block.iDate + 2]){
+        const v = (r[k] || '').trim();
+        if (v && v !== 'TRUE' && v !== 'FALSE' && !/^\d/.test(v)){ author = v; break; }
+      }
+    }
+    /* 行ごとのコンテンツ名・メモ（ステータス列より左のセル） */
+    let sub = r.slice(0, block.iStatus)
+      .map(c => String(c).replace(/\s+/g, ' ').trim())
+      .filter(c => c && c !== block.name)
+      .join(' ／ ');
+    if (sub.length > 70) sub = sub.slice(0, 70) + '…';
+
+    items.push({
+      company: block.name,
+      sub,
+      status, statusRaw: status || '未記入（未作成）',
+      group: groupOf(status),
+      date, dateRaw,
+      author, editor: block.editor, ope: block.ope, dir: block.dir,
+      owner: author || block.editor || '担当未設定'
+    });
+  }
+  return { items, skipped };
+}
+
+/* =========================================================
+   5. 抽出（期間 × 未完了）
+   ========================================================= */
+let ALL = [];
+
+function runExtract(){
+  const base = baseDate();
+  const text = $('#raw').value;
+  if (!text.trim()){ alert('データを貼り付けてください。'); return; }
+
+  const { items, skipped } = extractItems(parseDelimited(text), base);
+  const range = +$('#rangeDays').value;
+  const past  = $('#incOverdue').checked ? 30 : 0;
+
+  ALL = items.filter(it => {
+    const diff = Math.round((it.date - base) / 86400000);
+    if (diff > range || diff < -past) return false;
+    if (isDone(it.status)) return false;
+    if (!it.status && !$('#incBlank').checked) return false;
+    return true;
+  }).map(it => {
+    const diff = Math.round((it.date - base) / 86400000);
+    return { ...it, diff, urg: diff < 0 ? 'over' : diff <= 3 ? 'u3' : diff <= 7 ? 'u7' : 'u14' };
+  });
+
+  $('#parseNote').classList.remove('hidden');
+  $('#parseNote').textContent =
+    `解析完了：${items.length} 行を読み取り、${ALL.length} 件を抽出しました。`
+    + (skipped ? `（投稿日が日付として読めない ${skipped} 行はスキップ）` : '');
+
+  if (!ALL.length){
+    $('#result').classList.add('hidden');
+    alert('条件に合う未完了案件は見つかりませんでした。基準日・抽出期間・完了ステータスの設定をご確認ください。');
+    return;
+  }
+
+  $('#result').classList.remove('hidden');
+  buildFilters();
+  render();
+  $('#result').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+/* =========================================================
+   6. 描画
+   ========================================================= */
+const URG = {
+  over:{ label:'期限超過', icon:'⚑', cls:'u-over',  stripe:'stripe-over' },
+  u3  :{ label:'至急',     icon:'●', cls:'u-3',     stripe:'stripe-3'   },
+  u7  :{ label:'今週中',   icon:'▲', cls:'u-7',     stripe:'stripe-7'   },
+  u14 :{ label:'予定',     icon:'○', cls:'u-14',    stripe:'stripe-14'  }
+};
+const fmtDate = d => `${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})`;
+const fmtDiff = n => n < 0 ? `${-n}日超過` : n === 0 ? '本日' : `あと${n}日`;
+
+function buildFilters(){
+  const fill = (sel, vals, label) => {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${label}：すべて</option>` +
+      vals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    sel.value = vals.includes(cur) ? cur : '';
+  };
+  fill($('#fOwner'),  [...new Set(ALL.map(i => i.owner))].sort(), '担当者');
+  fill($('#fStatus'), [...new Set(ALL.map(i => i.group))].sort(), 'ステータス');
+  const m = $('#mOwner');
+  m.innerHTML = `<option value="__all">全担当者ぶんをまとめて</option>` +
+    [...new Set(ALL.map(i => i.owner))].sort().map(v => `<option value="${esc(v)}">${esc(v)} さん宛</option>`).join('');
+}
+
+function filtered(){
+  const t = $('#fText').value.trim();
+  const o = $('#fOwner').value, s = $('#fStatus').value, u = $('#fUrg').value;
+  let list = ALL.filter(i =>
+    (!t || (i.company + i.sub).includes(t)) &&
+    (!o || i.owner === o) && (!s || i.group === s) && (!u || i.urg === u));
+  const sort = $('#fSort').value;
+  list.sort((a,b) =>
+    sort === 'owner'   ? a.owner.localeCompare(b.owner, 'ja')   || a.date - b.date :
+    sort === 'company' ? a.company.localeCompare(b.company,'ja')|| a.date - b.date :
+                         a.date - b.date || a.company.localeCompare(b.company, 'ja'));
+  return list;
+}
+
+function bars(target, pairs){
+  const max = Math.max(1, ...pairs.map(p => p[1]));
+  target.innerHTML = pairs.map(([k, v]) => `
+    <div class="flex items-center gap-3">
+      <div class="w-28 shrink-0 text-xs ink-2 text-right truncate" title="${esc(k)}">${esc(k)}</div>
+      <div class="flex-1 h-4 bar-track rounded-sm overflow-hidden">
+        <div class="h-full bar-fill" style="width:${Math.max(2, v / max * 100)}%"></div>
+      </div>
+      <div class="w-9 shrink-0 text-xs font-bold tnum text-right">${v}</div>
+    </div>`).join('');
+}
+
+function render(){
+  const list = filtered();
+
+  /* KPI */
+  const n = u => ALL.filter(i => i.urg === u).length;
+  /* 数値は必ず本文インク（黄色は白背景で判読できないため）。色は左のストライプが担う。 */
+  const kpi = [
+    { v: ALL.length,          k:'未完了 合計',       tone:'var(--ink-3)',      num:'var(--ink-1)' },
+    { v: n('over') + n('u3'), k:'期限超過・3日以内', tone:'var(--c-critical)', num:'var(--c-critical)' },
+    { v: n('u7'),             k:'1週間以内',         tone:'var(--c-warning)',  num:'var(--ink-1)' },
+    { v: new Set(ALL.map(i => i.owner)).size, k:'関係する担当者', tone:'var(--ink-3)', num:'var(--ink-1)' }
+  ];
+  $('#kpis').innerHTML = kpi.map(x => `
+    <div class="card-surface border rounded-xl p-4 relative overflow-hidden">
+      <div class="absolute inset-y-0 left-0 w-1" style="background:${x.tone}"></div>
+      <div class="text-3xl font-bold leading-none" style="color:${x.num}">${x.v}<span class="text-sm ink-3 font-normal ml-1">件</span></div>
+      <div class="text-xs ink-2 mt-1.5">${x.k}</div>
+    </div>`).join('');
+
+  /* チャート */
+  const count = key => {
+    const m = new Map();
+    ALL.forEach(i => m.set(i[key], (m.get(i[key]) || 0) + 1));
+    return [...m.entries()].sort((a,b) => b[1] - a[1]);
+  };
+  bars($('#chartStatus'), count('group'));
+  bars($('#chartOwner'),  count('owner').slice(0, 10));
+
+  /* カード */
+  $('#filterNote').textContent = `${list.length} 件を表示中（全 ${ALL.length} 件）`;
+  $('#empty').classList.toggle('hidden', list.length > 0);
+  $('#cards').innerHTML = list.map(i => {
+    const u = URG[i.urg];
+    return `
+    <article class="card-surface border rounded-xl p-4 relative overflow-hidden">
+      <div class="absolute inset-y-0 left-0 w-1 ${u.stripe}"></div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[11px] font-bold px-2 py-0.5 rounded ${u.cls}">${u.icon} ${u.label}</span>
+        <span class="text-sm font-bold tnum">${fmtDate(i.date)}</span>
+        <span class="text-xs ink-3 tnum ml-auto">${fmtDiff(i.diff)}</span>
+      </div>
+      <h3 class="font-bold text-[15px] leading-snug">${esc(i.company)}</h3>
+      ${i.sub ? `<p class="text-xs ink-2 mt-0.5 leading-snug">${esc(i.sub)}</p>` : ''}
+      <div class="mt-3 flex flex-wrap items-center gap-1.5">
+        <span class="text-xs px-2 py-1 rounded border hair ink-2">${esc(i.statusRaw)}</span>
+      </div>
+      <dl class="mt-3 pt-3 border-t hair grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <div><dt class="ink-3 inline">作成者</dt> <dd class="inline font-medium">${esc(i.author || '未設定')}</dd></div>
+        <div><dt class="ink-3 inline">基本編集</dt> <dd class="inline font-medium">${esc(i.editor || '—')}</dd></div>
+        <div><dt class="ink-3 inline">運用</dt> <dd class="inline font-medium">${esc(i.ope || '—')}</dd></div>
+        <div><dt class="ink-3 inline">D/P</dt> <dd class="inline font-medium">${esc(i.dir || '—')}</dd></div>
+      </dl>
+    </article>`;
+  }).join('');
+}
+
+/* =========================================================
+   7. リマインド文
+   ========================================================= */
+function reminderFor(owner){
+  const list = ALL.filter(i => i.owner === owner).sort((a,b) => a.date - b.date);
+  if (!list.length) return '';
+  const lines = list.map(i =>
+    `・${fmtDate(i.date)}（${fmtDiff(i.diff)}）${i.company}${i.sub ? ' ／ ' + i.sub : ''}\n　　現在のステータス：${i.statusRaw}`);
+  const urgent = list.filter(i => i.urg === 'over' || i.urg === 'u3').length;
+  return [
+    `${owner}さん`,
+    ``,
+    `お疲れ様です。`,
+    `投稿予定日が近づいている動画のうち、まだ完了していないものが ${list.length} 本あります。`,
+    urgent ? `うち ${urgent} 本は期限超過または3日以内が投稿予定です。優先してご対応をお願いします。` : `進捗の共有をお願いします。`,
+    ``,
+    ...lines,
+    ``,
+    `完了しているものがあれば、シートのステータス更新をお願いします。`,
+    `よろしくお願いいたします。`
+  ].join('\n');
+}
+function buildReminder(){
+  const v = $('#mOwner').value;
+  $('#mText').value = v === '__all'
+    ? [...new Set(ALL.map(i => i.owner))].sort()
+        .map(o => reminderFor(o)).join('\n\n' + '─'.repeat(28) + '\n\n')
+    : reminderFor(v);
+}
+async function copyText(t){
+  try { await navigator.clipboard.writeText(t); return true; } catch(e){}
+  const ta = el('textarea'); ta.value = t;
+  ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch(e){}
+  ta.remove(); return ok;
+}
+
+/* =========================================================
+   8. CSV 書き出し
+   ========================================================= */
+function exportCSV(){
+  const rows = [['投稿日','残り','緊急度','企業名/コンテンツ名','補足','ステータス','作成者','基本編集','運用','D/P']];
+  filtered().forEach(i => rows.push([
+    fmtDate(i.date), fmtDiff(i.diff), URG[i.urg].label,
+    i.company, i.sub, i.statusRaw, i.author, i.editor, i.ope, i.dir
+  ]));
+  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
+  a.download = `未完了動画_${toInput(baseDate())}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* =========================================================
+   9. サンプルデータ（基準日から自動生成）
+   ========================================================= */
+function sampleTSV(){
+  const b = baseDate();
+  const d = n => { const x = new Date(b); x.setDate(x.getDate()+n); return `${x.getMonth()+1}月${x.getDate()}日(${DOW[x.getDay()]})`; };
+  const T = a => a.join('\t');
+  return [
+    T(['','株式会社サンプル商事','色・フォント','端末','投稿日','','作成者','CT','テキストサイズ','備考']),
+    T(['','','基本編集＊たろう']),
+    T(['','','撮影＊はなこ　運用＊みえ　P＊れん']),
+    T(['','','確認済','Mac16', d(-6),'','たろう','FALSE','FALSE']),
+    T(['','','作成中','Mac16', d(1), '','たろう','FALSE','FALSE']),
+    T(['','','P確認待ち','Mac16', d(5),'','たろう','FALSE','FALSE']),
+    T(['','','', '', d(12),'','','FALSE','FALSE']),
+    T(['','サンプル工業株式会社','','端末','投稿日','','作成者','CT','テキストサイズ','備考']),
+    T(['','','基本編集＊じろう']),
+    T(['','','撮影＊　運用＊なごみ　D＊ひより']),
+    T(['','','先方送信済み','Mac28', d(0),'','じろう','FALSE','FALSE']),
+    T(['','','素材作成中','Mac28', d(2),'','じろう','FALSE','FALSE']),
+    T(['','','QA確認依頼中','Mac28', d(3),'','じろう','FALSE','FALSE']),
+    T(['','','未撮影','', d(9),'','','FALSE','FALSE']),
+    T(['','サンプル歯科クリニック','','端末','投稿日','','作成者','CT','テキストサイズ','備考']),
+    T(['','','基本編集＊さぶろう']),
+    T(['','','撮影＊　運用＊ちかこ　P＊みっつ']),
+    T(['第3回 インタビュー','','ディレクター送信済み','P77', d(-2),'','さぶろう','FALSE','FALSE']),
+    T(['第4回 院内紹介','','作成中','P77', d(6),'','さぶろう','FALSE','FALSE']),
+    T(['第5回 採用','','','', d(13),'','','FALSE','FALSE'])
+  ].join('\n');
+}
+
+/* =========================================================
+   10. イベント
+   ========================================================= */
+$('#runBtn').onclick    = runExtract;
+$('#sampleBtn').onclick = () => { $('#raw').value = sampleTSV(); };
+$('#clearBtn').onclick  = () => { $('#raw').value = ''; $('#result').classList.add('hidden'); $('#parseNote').classList.add('hidden'); };
+['#fText','#fOwner','#fStatus','#fUrg','#fSort'].forEach(s => $(s).addEventListener('input', render));
+$('#csvBtn').onclick    = exportCSV;
+
+$('#remindBtn').onclick = () => { buildReminder(); $('#modal').classList.remove('hidden'); $('#modal').classList.add('flex'); };
+$('#mOwner').onchange   = buildReminder;
+$('#mClose').onclick    = () => { $('#modal').classList.add('hidden'); $('#modal').classList.remove('flex'); $('#mMsg').textContent=''; };
+$('#modal').onclick     = e => { if (e.target === $('#modal')) $('#mClose').click(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) $('#mClose').click(); });
+/* Tailwind CDN が読めない環境（社内ネットワーク等）での注意表示 */
+if (!window.tailwind){
+  const bar = el('div', '', 'スタイル（Tailwind CDN）を読み込めませんでした。インターネットに接続できる環境で開くと、正しいデザインで表示されます。機能そのものは動作します。');
+  bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:60;padding:10px 14px;font-size:12px;background:#d03b3b;color:#fff';
+  document.body.appendChild(bar);
+}
+
+$('#mCopy').onclick = async () => {
+  const ok = await copyText($('#mText').value);
+  $('#mMsg').textContent = ok ? '✓ コピーしました' : '手動でコピーしてください';
+  $('#mMsg').style.color = ok ? 'var(--c-good)' : 'var(--c-critical)';
+  setTimeout(() => $('#mMsg').textContent = '', 2600);
+};
+</script>
+</body>
+</html>
