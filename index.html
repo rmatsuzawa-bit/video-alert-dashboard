@@ -198,15 +198,30 @@ if (window.tailwind) tailwind.config = {
 <!-- ============ リマインド文モーダル ============ -->
 <div id="modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background:rgba(0,0,0,.5)">
   <div class="card-surface border rounded-2xl w-full max-w-2xl max-h-[86vh] flex flex-col">
-    <div class="p-4 border-b hair flex flex-wrap items-center gap-3">
-      <h2 class="font-bold">リマインド文</h2>
-      <label class="text-xs ink-2 ml-auto flex items-center gap-1.5">
-        基準日
-        <input id="mBaseDate" type="date" class="card-surface border rounded-lg px-2 py-1.5 text-sm tnum">
-      </label>
-      <button id="mClose" type="button" class="ink-2 px-2 text-xl leading-none hover:opacity-70" aria-label="閉じる">×</button>
+    <div class="p-4 border-b hair">
+      <div class="flex items-center gap-3">
+        <h2 class="font-bold">リマインド文</h2>
+        <button id="mClose" type="button" class="ink-2 px-2 text-xl leading-none hover:opacity-70 ml-auto" aria-label="閉じる">×</button>
+      </div>
+      <div class="mt-3 flex flex-wrap items-end gap-3">
+        <label class="text-xs ink-2">
+          <span class="block mb-1">起点日</span>
+          <input id="mStartDate" type="date" class="card-surface border rounded-lg px-2 py-1.5 text-sm tnum">
+        </label>
+        <span class="ink-3 pb-1.5">〜</span>
+        <label class="text-xs ink-2">
+          <span class="block mb-1">指定日</span>
+          <input id="mEndDate" type="date" class="card-surface border rounded-lg px-2 py-1.5 text-sm tnum">
+        </label>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-1.5" id="mPresets">
+        <button type="button" data-preset="7"  class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">1週間後まで</button>
+        <button type="button" data-preset="16" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">2週間後まで</button>
+        <button type="button" data-preset="30" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">30日後まで</button>
+        <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">今月末まで</button>
+        <button type="button" data-preset="nextMonth" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">来月末まで</button>
+      </div>
     </div>
-    <p class="px-4 text-[11px] ink-3">基準日から16日先までの案件を、投稿日の早い順にまとめます。</p>
     <textarea id="mText" class="flex-1 m-4 card-surface border rounded-lg p-3 text-sm font-mono leading-relaxed resize-none" rows="14"></textarea>
     <div class="px-4 pb-4 flex gap-2">
       <button id="mCopy" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">クリップボードにコピー</button>
@@ -667,13 +682,17 @@ function render(){
 /* =========================================================
    7. リマインド文
    ========================================================= */
-const REMINDER_RANGE_DAYS = 16;
-
-function reminderBaseDate(){
-  const v = $('#mBaseDate').value;
-  if (!v) return baseDate();
+function readDateInput(id, fallback){
+  const v = $(id).value;
+  if (!v) return fallback;
   const [y,m,d] = v.split('-').map(Number);
   return new Date(y, m-1, d);
+}
+function reminderStartDate(){ return readDateInput('#mStartDate', baseDate()); }
+function reminderEndDate(){
+  const start = reminderStartDate();
+  const fallback = new Date(start); fallback.setDate(start.getDate() + 16);
+  return readDateInput('#mEndDate', fallback);
 }
 
 /* 今週（月曜始まり）＋来週の範囲。この範囲の投稿日には💡を付ける */
@@ -684,17 +703,37 @@ function lightbulbRange(base){
   return { start: monday, end: nextSunday };
 }
 
+function applyPreset(kind){
+  const start = reminderStartDate();
+  let end;
+  if (kind === 'thisMonth'){
+    end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+  } else if (kind === 'nextMonth'){
+    end = new Date(start.getFullYear(), start.getMonth() + 2, 0);
+  } else {
+    end = new Date(start); end.setDate(start.getDate() + Number(kind));
+  }
+  $('#mEndDate').value = toInput(end);
+  [...$('#mPresets').children].forEach(b => {
+    const active = b.dataset.preset === kind;
+    b.style.borderColor = active ? 'var(--bar)' : '';
+    b.style.color = active ? 'var(--bar)' : '';
+    b.style.fontWeight = active ? '700' : '';
+  });
+  buildReminder();
+}
+
 function buildReminder(){
   if (!RAW_TEXT){ $('#mText').value = ''; return; }
-  const base = reminderBaseDate();
-  const { items } = extractItems(parseDelimited(RAW_TEXT), base);
-  const { start, end } = lightbulbRange(base);
+  const start = reminderStartDate();
+  const end = reminderEndDate();
+  const { items } = extractItems(parseDelimited(RAW_TEXT), start);
+  const week = lightbulbRange(start);
 
   const list = items.filter(it => {
     if (ADMIN_CONFIG.pausedCompanies.includes(it.company)) return false;
     if (ADMIN_CONFIG.excludeKeywords.some(k => k && it.company.includes(k))) return false;
-    const diff = Math.round((it.date - base) / 86400000);
-    if (diff < 0 || diff > REMINDER_RANGE_DAYS) return false;
+    if (it.date < start || it.date > end) return false;
     if (isDone(it.status)) return false;
     if (!isReminderTarget(it)) return false;
     return true;
@@ -712,7 +751,7 @@ function buildReminder(){
     const headerOwner = owners.size === 1 ? [...owners][0] : '';
     const confirmMark = gItems.some(i => i.confirmMark);
     const lines = gItems.map(i => {
-      const inWeek = i.date >= start && i.date <= end;
+      const inWeek = i.date >= week.start && i.date <= week.end;
       const authorPart = (i.author && i.author !== i.owner) ? ` ${i.author}` : '';
       const statusPart = i.status.trim();
       return `${fmtDateLong(i.date)}${inWeek ? '💡' : ''}${authorPart}${statusPart}`;
@@ -759,11 +798,18 @@ $('#csvBtn').onclick    = exportCSV;
 syncData();
 
 $('#remindBtn').onclick = () => {
-  if (!$('#mBaseDate').value) $('#mBaseDate').value = $('#baseDate').value;
-  buildReminder();
+  const firstOpen = !$('#mStartDate').value;
+  if (firstOpen) $('#mStartDate').value = $('#baseDate').value;
+  if (firstOpen){ applyPreset('16'); }
+  else { buildReminder(); }
   $('#modal').classList.remove('hidden'); $('#modal').classList.add('flex');
 };
-$('#mBaseDate').addEventListener('input', buildReminder);
+$('#mStartDate').addEventListener('input', buildReminder);
+$('#mEndDate').addEventListener('input', buildReminder);
+$('#mPresets').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-preset]');
+  if (btn) applyPreset(btn.dataset.preset);
+});
 $('#mClose').onclick    = () => { $('#modal').classList.add('hidden'); $('#modal').classList.remove('flex'); $('#mMsg').textContent=''; };
 $('#modal').onclick     = e => { if (e.target === $('#modal')) $('#mClose').click(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) $('#mClose').click(); });
