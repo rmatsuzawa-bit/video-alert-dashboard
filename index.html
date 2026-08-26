@@ -151,7 +151,7 @@ if (window.tailwind) tailwind.config = {
       </div>
       <div class="card-surface border rounded-xl p-4">
         <h3 class="text-sm font-bold">担当者別の残件数（2週間以内）</h3>
-        <p class="text-[11px] ink-3 mb-3">投稿日まで2週間以内の分・件数の多い順・上位10名</p>
+        <p class="text-[11px] ink-3 mb-3">投稿日まで2週間以内・未作成／作成中のみ・件数の多い順・上位10名</p>
         <div id="chartOwner" class="space-y-2"></div>
       </div>
     </section>
@@ -329,12 +329,11 @@ function doneTerms(){
 /* カード・リマインド文でも企業名が同じでもまとめず個別扱いにするタイトル */
 const NO_GROUP = ['冴えたいこやくん／リアルクエスト～本日の依頼～'];
 
-/* NO_GROUP対象は「／」区切りを会社名／サブタイトルの2行に分けて表示する */
+/* NO_GROUP対象は「／」より前の会社名だけを表示する（後半のサブタイトルは表示しない） */
 function splitCompanyDisplay(company){
   if (!NO_GROUP.includes(company)) return { title: company, subtitle: '' };
   const idx = company.indexOf('／');
-  if (idx === -1) return { title: company, subtitle: '' };
-  return { title: company.slice(0, idx), subtitle: company.slice(idx + 1) };
+  return { title: idx === -1 ? company : company.slice(0, idx), subtitle: '' };
 }
 
 /* リマインド文からは確認待ち系（P/D/QA確認待ち）と確認済みの案件は除く */
@@ -575,7 +574,7 @@ function render(){
     return [...m.entries()].sort((a,b) => b[1] - a[1]);
   };
   bars($('#chartStatus'), count('group'));
-  bars($('#chartOwner'),  count('owner', i => i.diff <= 14).slice(0, 10));
+  bars($('#chartOwner'),  count('owner', i => i.diff <= 14 && (i.group === '未作成' || i.group === '作成中')).slice(0, 10));
 
   /* カード（同じ企業は1枠にまとめる。枠内の並び順は一覧の並び順を維持） */
   $('#filterNote').textContent = `${list.length} 件を表示中（全 ${ALL.length} 件）`;
