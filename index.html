@@ -661,7 +661,7 @@ function reminderFor(owner){
     byCompany.get(i.company).items.push(i);
   });
   const body = [...byCompany.values()]
-    .map(({ company, items }) => `⭐️${company}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
+    .map(({ company, items }) => `⭐️${company}（${items.length}件）\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
     .join('\n\n\n');
   return `【担当：${owner}】\n\n${body}`;
 }
