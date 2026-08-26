@@ -54,10 +54,12 @@ if (window.tailwind) tailwind.config = {
   .u-7     { color:#7a5a06; background:color-mix(in srgb, var(--c-warning) 26%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c-warning) 60%, transparent); }
   .dark .u-7 { color:var(--c-warning); }
   .u-14    { color:var(--ink-2); background:var(--bar-track); box-shadow:inset 0 0 0 1px var(--hairline); }
+  .u-30    { color:var(--ink-3); background:var(--bar-track); box-shadow:inset 0 0 0 1px var(--hairline); }
   .stripe-over{ background:var(--c-critical); }
   .stripe-3   { background:var(--c-critical); }
   .stripe-7   { background:var(--c-warning); }
   .stripe-14  { background:var(--ink-3); }
+  .stripe-30  { background:var(--hairline); }
 
   .bar-track{ background:var(--bar-track); }
   .bar-fill{ background:var(--bar); border-radius:0 4px 4px 0; }
@@ -166,8 +168,8 @@ if (window.tailwind) tailwind.config = {
           <option value="over">期限超過</option>
           <option value="u3">3日以内</option>
           <option value="u7">1週間以内</option>
-          <option value="w14">2週間以内</option>
-          <option value="u14">それ以降</option>
+          <option value="u14">2週間以内</option>
+          <option value="u30">それ以降</option>
         </select>
         <select id="fSort" class="card-surface border rounded-lg px-3 py-2 text-sm">
           <option value="date">投稿日順</option>
@@ -459,7 +461,7 @@ function runExtract(){
     return true;
   }).map(it => {
     const diff = Math.round((it.date - base) / 86400000);
-    return { ...it, diff, urg: diff < 0 ? 'over' : diff <= 3 ? 'u3' : diff <= 7 ? 'u7' : 'u14' };
+    return { ...it, diff, urg: diff < 0 ? 'over' : diff <= 3 ? 'u3' : diff <= 7 ? 'u7' : diff <= 14 ? 'u14' : 'u30' };
   });
 
   $('#parseNote').classList.remove('hidden');
@@ -481,10 +483,11 @@ function runExtract(){
    6. 描画
    ========================================================= */
 const URG = {
-  over:{ label:'期限超過', icon:'⚑', cls:'u-over',  stripe:'stripe-over' },
-  u3  :{ label:'至急',     icon:'●', cls:'u-3',     stripe:'stripe-3'   },
-  u7  :{ label:'今週中',   icon:'▲', cls:'u-7',     stripe:'stripe-7'   },
-  u14 :{ label:'予定',     icon:'○', cls:'u-14',    stripe:'stripe-14'  }
+  over:{ label:'期限超過',   icon:'⚑', cls:'u-over',  stripe:'stripe-over' },
+  u3  :{ label:'至急',       icon:'●', cls:'u-3',     stripe:'stripe-3'   },
+  u7  :{ label:'今週中',     icon:'▲', cls:'u-7',     stripe:'stripe-7'   },
+  u14 :{ label:'2週間以内', icon:'○', cls:'u-14',    stripe:'stripe-14'  },
+  u30 :{ label:'それ以降',   icon:'○', cls:'u-30',    stripe:'stripe-30'  }
 };
 const fmtDate = d => `${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})`;
 const fmtDiff = n => n < 0 ? `${-n}日超過` : n === 0 ? '本日' : `あと${n}日`;
@@ -508,8 +511,7 @@ function filtered(){
   const o = $('#fOwner').value, s = $('#fStatus').value, u = $('#fUrg').value;
   let list = ALL.filter(i =>
     (!t || (i.company + i.sub).includes(t)) &&
-    (!o || i.owner === o) && (!s || i.group === s) &&
-    (!u || (u === 'w14' ? i.diff <= 14 : i.urg === u)));
+    (!o || i.owner === o) && (!s || i.group === s) && (!u || i.urg === u));
   const sort = $('#fSort').value;
   list.sort((a,b) =>
     sort === 'owner'   ? a.owner.localeCompare(b.owner, 'ja')   || a.date - b.date :
@@ -558,29 +560,43 @@ function render(){
   bars($('#chartStatus'), count('group'));
   bars($('#chartOwner'),  count('owner').slice(0, 10));
 
-  /* カード */
+  /* カード（同じ企業は1枠にまとめる。枠内の並び順は一覧の並び順を維持） */
   $('#filterNote').textContent = `${list.length} 件を表示中（全 ${ALL.length} 件）`;
   $('#empty').classList.toggle('hidden', list.length > 0);
-  $('#cards').innerHTML = list.map(i => {
-    const u = URG[i.urg];
+
+  const groups = [];
+  const groupIndex = new Map();
+  list.forEach(i => {
+    if (!groupIndex.has(i.company)) { groupIndex.set(i.company, groups.length); groups.push({ company: i.company, items: [] }); }
+    groups[groupIndex.get(i.company)].items.push(i);
+  });
+  const URG_ORDER = ['over','u3','u7','u14','u30'];
+  const worstUrg = items => items.reduce((w, i) => URG_ORDER.indexOf(i.urg) < URG_ORDER.indexOf(w) ? i.urg : w, items[0].urg);
+
+  $('#cards').innerHTML = groups.map(({ company, items }) => {
+    const u = URG[worstUrg(items)];
+    const first = items[0];
     return `
     <article class="card-surface border rounded-xl p-4 relative overflow-hidden">
       <div class="absolute inset-y-0 left-0 w-1 ${u.stripe}"></div>
       <div class="flex items-center gap-2 mb-2">
         <span class="text-[11px] font-bold px-2 py-0.5 rounded ${u.cls}">${u.icon} ${u.label}</span>
-        <span class="text-sm font-bold tnum">${fmtDate(i.date)}</span>
-        <span class="text-xs ink-3 tnum ml-auto">${fmtDiff(i.diff)}</span>
+        <span class="text-xs ink-3 ml-auto">${items.length} 件</span>
       </div>
-      <h3 class="font-bold text-[15px] leading-snug">${esc(i.company)}</h3>
-      ${i.sub ? `<p class="text-xs ink-2 mt-0.5 leading-snug">${esc(i.sub)}</p>` : ''}
-      <div class="mt-3 flex flex-wrap items-center gap-1.5">
-        <span class="text-xs px-2 py-1 rounded border hair ink-2">${esc(i.statusRaw)}</span>
+      <h3 class="font-bold text-[15px] leading-snug">${esc(company)}</h3>
+      <div class="mt-2.5 space-y-1.5">
+        ${items.map(i => `
+        <div class="flex items-start gap-2 text-xs">
+          <span class="font-bold tnum shrink-0 w-12">${fmtDate(i.date)}</span>
+          <span class="ink-3 tnum shrink-0 w-14">${fmtDiff(i.diff)}</span>
+          <span class="ink-2 leading-snug flex-1">${esc(i.sub || i.statusRaw)}</span>
+        </div>`).join('')}
       </div>
       <dl class="mt-3 pt-3 border-t hair grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-        <div><dt class="ink-3 inline">作成者</dt> <dd class="inline font-medium">${esc(i.author || '未設定')}</dd></div>
-        <div><dt class="ink-3 inline">基本編集</dt> <dd class="inline font-medium">${esc(i.editor || '—')}</dd></div>
-        <div><dt class="ink-3 inline">運用</dt> <dd class="inline font-medium">${esc(i.ope || '—')}</dd></div>
-        <div><dt class="ink-3 inline">D/P</dt> <dd class="inline font-medium">${esc(i.dir || '—')}</dd></div>
+        <div><dt class="ink-3 inline">作成者</dt> <dd class="inline font-medium">${esc(first.author || '未設定')}</dd></div>
+        <div><dt class="ink-3 inline">基本編集</dt> <dd class="inline font-medium">${esc(first.editor || '—')}</dd></div>
+        <div><dt class="ink-3 inline">運用</dt> <dd class="inline font-medium">${esc(first.ope || '—')}</dd></div>
+        <div><dt class="ink-3 inline">D/P</dt> <dd class="inline font-medium">${esc(first.dir || '—')}</dd></div>
       </dl>
     </article>`;
   }).join('');
