@@ -326,6 +326,14 @@ function doneTerms(){
   return base;
 }
 
+/* カード・リマインド文でも企業名が同じでもまとめず個別扱いにするタイトル */
+const NO_GROUP = ['冴えたいこやくん／リアルクエスト～本日の依頼～'];
+
+/* リマインド文からは確認待ち系（P/D/QA確認待ち）と確認済みの案件は除く */
+function isReminderTarget(i){
+  return i.group !== '確認待ち' && i.group !== 'QA確認依頼中' && !i.statusRaw.includes('確認済み');
+}
+
 /* =========================================================
    4. 表の解析：ヘッダー行（「投稿日」を含む行）ごとにブロック化
    ========================================================= */
@@ -566,9 +574,10 @@ function render(){
 
   const groups = [];
   const groupIndex = new Map();
-  list.forEach(i => {
-    if (!groupIndex.has(i.company)) { groupIndex.set(i.company, groups.length); groups.push({ company: i.company, items: [] }); }
-    groups[groupIndex.get(i.company)].items.push(i);
+  list.forEach((i, idx) => {
+    const key = NO_GROUP.includes(i.company) ? `${i.company}#${idx}` : i.company;
+    if (!groupIndex.has(key)) { groupIndex.set(key, groups.length); groups.push({ company: i.company, items: [] }); }
+    groups[groupIndex.get(key)].items.push(i);
   });
   const URG_ORDER = ['over','u3','u7','u14','u30'];
   const worstUrg = items => items.reduce((w, i) => URG_ORDER.indexOf(i.urg) < URG_ORDER.indexOf(w) ? i.urg : w, items[0].urg);
@@ -606,22 +615,23 @@ function render(){
    7. リマインド文
    ========================================================= */
 function reminderFor(owner){
-  const list = ALL.filter(i => i.owner === owner).sort((a,b) => a.date - b.date);
+  const list = ALL.filter(i => i.owner === owner && isReminderTarget(i)).sort((a,b) => a.date - b.date);
   if (!list.length) return '';
   const byCompany = new Map();
-  list.forEach(i => {
-    if (!byCompany.has(i.company)) byCompany.set(i.company, []);
-    byCompany.get(i.company).push(i);
+  list.forEach((i, idx) => {
+    const key = NO_GROUP.includes(i.company) ? `${i.company}#${idx}` : i.company;
+    if (!byCompany.has(key)) byCompany.set(key, { company: i.company, items: [] });
+    byCompany.get(key).items.push(i);
   });
-  return [...byCompany.entries()]
-    .map(([company, items]) => `⭐️${company}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
+  return [...byCompany.values()]
+    .map(({ company, items }) => `⭐️${company}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
     .join('\n\n\n');
 }
 function buildReminder(){
   const v = $('#mOwner').value;
   $('#mText').value = v === '__all'
     ? [...new Set(ALL.map(i => i.owner))].sort()
-        .map(o => reminderFor(o)).join('\n\n' + '─'.repeat(28) + '\n\n')
+        .map(o => reminderFor(o)).filter(Boolean).join('\n\n' + '─'.repeat(28) + '\n\n')
     : reminderFor(v);
 }
 async function copyText(t){
