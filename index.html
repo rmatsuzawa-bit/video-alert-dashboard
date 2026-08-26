@@ -598,7 +598,7 @@ function render(){
         <div class="flex items-start gap-2 text-xs">
           <span class="font-bold tnum shrink-0 w-12">${fmtDate(i.date)}</span>
           <span class="ink-3 tnum shrink-0 w-14">${fmtDiff(i.diff)}</span>
-          <span class="ink-2 leading-snug flex-1">${esc(i.sub || i.statusRaw)}</span>
+          <span class="ink-2 leading-snug flex-1">${esc(i.group)}</span>
         </div>`).join('')}
       </div>
       <dl class="mt-3 pt-3 border-t hair grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -623,9 +623,10 @@ function reminderFor(owner){
     if (!byCompany.has(key)) byCompany.set(key, { company: i.company, items: [] });
     byCompany.get(key).items.push(i);
   });
-  return [...byCompany.values()]
+  const body = [...byCompany.values()]
     .map(({ company, items }) => `⭐️${company}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
     .join('\n\n\n');
+  return `【担当：${owner}】\n\n${body}`;
 }
 function buildReminder(){
   const v = $('#mOwner').value;
