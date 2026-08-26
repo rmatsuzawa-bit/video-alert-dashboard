@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>動画制作 未作成アラート ダッシュボード</title>
+<title>未作成タスクモニター</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -79,7 +79,7 @@ if (window.tailwind) tailwind.config = {
   <header class="pt-8 pb-5 flex flex-wrap items-end gap-4 border-b hair">
     <div class="flex-1 min-w-[260px]">
       <p class="text-[11px] tracking-[0.18em] uppercase ink-3 font-medium">Video production · alert board</p>
-      <h1 class="text-2xl sm:text-3xl font-bold mt-1 leading-tight">未作成アラート ダッシュボード</h1>
+      <h1 class="text-2xl sm:text-3xl font-bold mt-1 leading-tight">未作成タスクモニター</h1>
       <p class="text-sm ink-2 mt-1">スプレッドシートの進捗表と同期して、期間内に投稿予定で未完了の案件だけを抽出します。</p>
     </div>
     <div class="flex items-end gap-2">
@@ -150,8 +150,8 @@ if (window.tailwind) tailwind.config = {
         <div id="chartStatus" class="space-y-2"></div>
       </div>
       <div class="card-surface border rounded-xl p-4">
-        <h3 class="text-sm font-bold">担当者別の残件数</h3>
-        <p class="text-[11px] ink-3 mb-3">件数の多い順・上位10名</p>
+        <h3 class="text-sm font-bold">担当者別の残件数（2週間以内）</h3>
+        <p class="text-[11px] ink-3 mb-3">投稿日まで2週間以内の分・件数の多い順・上位10名</p>
         <div id="chartOwner" class="space-y-2"></div>
       </div>
     </section>
@@ -560,13 +560,14 @@ function render(){
     </div>`).join('');
 
   /* チャート */
-  const count = key => {
+  const count = (key, pred) => {
+    const src = pred ? ALL.filter(pred) : ALL;
     const m = new Map();
-    ALL.forEach(i => m.set(i[key], (m.get(i[key]) || 0) + 1));
+    src.forEach(i => m.set(i[key], (m.get(i[key]) || 0) + 1));
     return [...m.entries()].sort((a,b) => b[1] - a[1]);
   };
   bars($('#chartStatus'), count('group'));
-  bars($('#chartOwner'),  count('owner').slice(0, 10));
+  bars($('#chartOwner'),  count('owner', i => i.diff <= 14).slice(0, 10));
 
   /* カード（同じ企業は1枠にまとめる。枠内の並び順は一覧の並び順を維持） */
   $('#filterNote').textContent = `${list.length} 件を表示中（全 ${ALL.length} 件）`;
