@@ -89,6 +89,8 @@ if (window.tailwind) tailwind.config = {
       </label>
       <button id="themeBtn" type="button" title="表示モードを切り替え"
         class="card-surface border rounded-lg px-3 py-2 text-sm hover:opacity-80">🌓</button>
+      <a href="/admin.html" title="管理設定"
+        class="card-surface border rounded-lg px-3 py-2 text-sm hover:opacity-80">⚙️</a>
     </div>
   </header>
 
@@ -469,14 +471,19 @@ function extractItems(rows, base){
    ========================================================= */
 let ALL = [];
 let RAW_TEXT = '';
+let ADMIN_CONFIG = { pausedCompanies: [], excludeKeywords: [] };
 
 async function syncData(){
   $('#syncStatus').textContent = '同期中…';
   $('#syncBtn').disabled = true;
   try {
-    const res = await fetch('/api/sheet', { cache:'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    RAW_TEXT = await res.text();
+    const [sheetRes, configRes] = await Promise.all([
+      fetch('/api/sheet', { cache:'no-store' }),
+      fetch('/api/config', { cache:'no-store' })
+    ]);
+    if (!sheetRes.ok) throw new Error(`HTTP ${sheetRes.status}`);
+    RAW_TEXT = await sheetRes.text();
+    if (configRes.ok) ADMIN_CONFIG = await configRes.json();
     const now = new Date();
     $('#syncStatus').textContent =
       `最終同期：${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -497,6 +504,8 @@ function runExtract(){
   const past  = $('#incOverdue').checked ? 30 : 0;
 
   ALL = items.filter(it => {
+    if (ADMIN_CONFIG.pausedCompanies.includes(it.company)) return false;
+    if (ADMIN_CONFIG.excludeKeywords.some(k => k && it.company.includes(k))) return false;
     const diff = Math.round((it.date - base) / 86400000);
     const effectiveRange = IN_HOUSE_COMPANIES.has(it.company) ? Math.max(range, IN_HOUSE_MIN_RANGE) : range;
     if (diff > effectiveRange || diff < -past) return false;
