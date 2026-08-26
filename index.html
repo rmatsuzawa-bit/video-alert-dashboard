@@ -104,15 +104,24 @@ if (window.tailwind) tailwind.config = {
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ink-2">
-      <label class="flex items-center gap-1.5">
-        <span>抽出期間</span>
-        <select id="rangeDays" class="card-surface border rounded-lg px-2 py-1.5">
-          <option value="7">7日以内</option>
-          <option value="14" selected>14日以内（2週間）</option>
-          <option value="30">30日以内</option>
-        </select>
+    <div class="flex flex-wrap items-end gap-3 text-xs ink-2">
+      <p class="ink-3">起点日は右上の「基準日」です。ここでは終わりの日付（指定日）を選びます。</p>
+    </div>
+    <div class="flex flex-wrap items-end gap-3 text-xs ink-2 mt-2">
+      <label>
+        <span class="block mb-1">指定日</span>
+        <input id="rangeEnd" type="date" class="card-surface border rounded-lg px-2 py-1.5 text-sm tnum">
       </label>
+    </div>
+    <div class="mt-2 flex flex-wrap gap-1.5" id="rangePresets">
+      <button type="button" data-preset="7"  class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">1週間後まで</button>
+      <button type="button" data-preset="16" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">2週間後まで</button>
+      <button type="button" data-preset="30" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">30日後まで</button>
+      <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">今月末まで</button>
+      <button type="button" data-preset="nextMonth" class="text-xs px-3 py-1.5 rounded-full border hair ink-2 hover:opacity-70">来月末まで</button>
+    </div>
+
+    <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ink-2">
       <label class="flex items-center gap-1.5">
         <input id="incOverdue" type="checkbox" checked class="rounded"><span>期限超過（過去30日）も含める</span>
       </label>
@@ -521,7 +530,8 @@ function runExtract(){
   const base = baseDate();
 
   const { items, skipped } = extractItems(parseDelimited(RAW_TEXT), base);
-  const range = +$('#rangeDays').value;
+  const rangeEnd = readDateInput('#rangeEnd', (() => { const d = new Date(base); d.setDate(d.getDate() + 16); return d; })());
+  const range = Math.round((rangeEnd - base) / 86400000);
   const past  = $('#incOverdue').checked ? 30 : 0;
 
   ALL = items.filter(it => {
@@ -789,12 +799,38 @@ function exportCSV(){
 /* =========================================================
    9. イベント
    ========================================================= */
+function applyRangePreset(kind){
+  const base = baseDate();
+  let end;
+  if (kind === 'thisMonth'){
+    end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+  } else if (kind === 'nextMonth'){
+    end = new Date(base.getFullYear(), base.getMonth() + 2, 0);
+  } else {
+    end = new Date(base); end.setDate(base.getDate() + Number(kind));
+  }
+  $('#rangeEnd').value = toInput(end);
+  [...$('#rangePresets').children].forEach(b => {
+    const active = b.dataset.preset === kind;
+    b.style.borderColor = active ? 'var(--bar)' : '';
+    b.style.color = active ? 'var(--bar)' : '';
+    b.style.fontWeight = active ? '700' : '';
+  });
+  runExtract();
+}
+
 $('#syncBtn').onclick = syncData;
-$('#baseDate').addEventListener('input', runExtract);
-['#rangeDays','#incOverdue','#dirDone','#incBlank'].forEach(s => $(s).addEventListener('change', runExtract));
+$('#baseDate').addEventListener('input', () => { if ($('#rangeEnd').value) runExtract(); else applyRangePreset('16'); });
+$('#rangeEnd').addEventListener('input', runExtract);
+$('#rangePresets').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-preset]');
+  if (btn) applyRangePreset(btn.dataset.preset);
+});
+['#incOverdue','#dirDone','#incBlank'].forEach(s => $(s).addEventListener('change', runExtract));
 $('#doneList').addEventListener('input', runExtract);
 ['#fText','#fOwner','#fStatus','#fUrg','#fSort','#fInHouse'].forEach(s => $(s).addEventListener('input', render));
 $('#csvBtn').onclick    = exportCSV;
+applyRangePreset('16');
 syncData();
 
 $('#remindBtn').onclick = () => {
