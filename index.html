@@ -423,7 +423,7 @@ function extractItems(rows, base){
       group: groupOf(status),
       date, dateRaw,
       author, editor: block.editor, ope: block.ope, dir: block.dir,
-      owner: author || block.editor || '担当未設定'
+      owner: block.editor || '担当未設定'
     });
   }
   return { items, skipped };
