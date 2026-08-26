@@ -161,6 +161,9 @@ if (window.tailwind) tailwind.config = {
       <div class="card-surface border rounded-xl p-3 flex flex-wrap items-center gap-2">
         <input id="fText" type="search" placeholder="企業名・コンテンツ名で検索"
           class="card-surface border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]">
+        <label class="flex items-center gap-1.5 text-sm ink-2 px-1">
+          <input id="fInHouse" type="checkbox" class="rounded"><span>自社のみ</span>
+        </label>
         <select id="fOwner"  class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">担当者：すべて</option></select>
         <select id="fStatus" class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">ステータス：すべて</option></select>
         <select id="fUrg"    class="card-surface border rounded-lg px-3 py-2 text-sm">
@@ -353,6 +356,25 @@ const COMPANY_OVERRIDES = {
   '株式会社ASCare（アスケア）集客用／7/24～画像先に(終了7/23)': '株式会社ASCare（アスケア）集客用'
 };
 
+/* 自社アカウント（クライアント企業ではない）。抽出期間の設定に関わらず最低16日先まで表示する */
+const IN_HOUSE_COMPANIES = new Set([
+  '～突撃してみた～／けいたろう社長',
+  '変身ベルト',
+  'RCの部屋：short',
+  'あなたの推しは？',
+  '朝礼昼礼終礼',
+  'それってどんな仕事？',
+  'ふところヒロシ',
+  '本音上司',
+  'うちの友だち見てくれへん？',
+  '昭和上司と令和部下',
+  'けいたろう君新コンテンツ（ゆう）',
+  '40代メンズファッションをお前が語るな',
+  '冴えたいこやくん',
+  'リアルクエスト～本日の依頼～'
+]);
+const IN_HOUSE_MIN_RANGE = 16;
+
 /* 「撮影＊さとあや　運用＊みえ　P＊れん」のような担当メモ行を分解する。
    ラベルだけで値が空の場合（例：運用＊　D＊れん）は空として扱う。 */
 function parseMeta(str){
@@ -476,7 +498,8 @@ function runExtract(){
 
   ALL = items.filter(it => {
     const diff = Math.round((it.date - base) / 86400000);
-    if (diff > range || diff < -past) return false;
+    const effectiveRange = IN_HOUSE_COMPANIES.has(it.company) ? Math.max(range, IN_HOUSE_MIN_RANGE) : range;
+    if (diff > effectiveRange || diff < -past) return false;
     if (isDone(it.status)) return false;
     if (!it.status && !$('#incBlank').checked) return false;
     return true;
@@ -530,9 +553,11 @@ function buildFilters(){
 function filtered(){
   const t = $('#fText').value.trim();
   const o = $('#fOwner').value, s = $('#fStatus').value, u = $('#fUrg').value;
+  const inHouseOnly = $('#fInHouse').checked;
   let list = ALL.filter(i =>
     (!t || (i.company + i.sub).includes(t)) &&
-    (!o || i.owner === o) && (!s || i.group === s) && (!u || i.urg === u));
+    (!o || i.owner === o) && (!s || i.group === s) && (!u || i.urg === u) &&
+    (!inHouseOnly || IN_HOUSE_COMPANIES.has(i.company)));
   const sort = $('#fSort').value;
   list.sort((a,b) =>
     sort === 'owner'   ? a.owner.localeCompare(b.owner, 'ja')   || a.date - b.date :
@@ -679,7 +704,7 @@ $('#syncBtn').onclick = syncData;
 $('#baseDate').addEventListener('input', runExtract);
 ['#rangeDays','#incOverdue','#dirDone','#incBlank'].forEach(s => $(s).addEventListener('change', runExtract));
 $('#doneList').addEventListener('input', runExtract);
-['#fText','#fOwner','#fStatus','#fUrg','#fSort'].forEach(s => $(s).addEventListener('input', render));
+['#fText','#fOwner','#fStatus','#fUrg','#fSort','#fInHouse'].forEach(s => $(s).addEventListener('input', render));
 $('#csvBtn').onclick    = exportCSV;
 syncData();
 
