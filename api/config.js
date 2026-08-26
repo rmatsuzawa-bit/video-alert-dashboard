@@ -1,15 +1,25 @@
-const { put, get } = require('@vercel/blob');
+const { put } = require('@vercel/blob');
 
 const PATHNAME = 'config.json';
 const DEFAULT_CONFIG = { pausedCompanies: [], excludeKeywords: ['切り抜き', '横型'] };
 
+/* @vercel/blob の list()/get() がこの実行環境で応答しないため、
+   読み取り専用トークンからストアIDを取り出し、ブロブの固定URLへ直接アクセスする */
+function blobBaseUrl() {
+  const token = process.env.BLOB_READ_WRITE_TOKEN || '';
+  const m = token.match(/^vercel_blob_rw_([a-zA-Z0-9]+)_/);
+  return m ? `https://${m[1].toLowerCase()}.private.blob.vercel-storage.com` : null;
+}
+
 async function readConfig() {
-  const result = await get(PATHNAME, { access: 'private', useCache: false }).catch(() => null);
-  if (!result) return DEFAULT_CONFIG;
-  const chunks = [];
-  for await (const chunk of result.stream) chunks.push(chunk);
-  const text = Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf-8');
-  try { return JSON.parse(text); } catch { return DEFAULT_CONFIG; }
+  const base = blobBaseUrl();
+  if (!base) return DEFAULT_CONFIG;
+  const res = await fetch(`${base}/${PATHNAME}`, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    cache: 'no-store'
+  }).catch(() => null);
+  if (!res || !res.ok) return DEFAULT_CONFIG;
+  try { return await res.json(); } catch { return DEFAULT_CONFIG; }
 }
 
 module.exports = async (req, res) => {

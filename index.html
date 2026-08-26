@@ -147,7 +147,7 @@ if (window.tailwind) tailwind.config = {
     <!-- チャート -->
     <section class="mt-4 grid gap-3 lg:grid-cols-2">
       <div class="card-surface border rounded-xl p-4">
-        <h3 class="text-sm font-bold">ステータス別の件数</h3>
+        <h3 class="text-sm font-bold">進捗</h3>
         <p class="text-[11px] ink-3 mb-3">未完了案件がどの工程で止まっているか</p>
         <div id="chartStatus" class="space-y-2"></div>
       </div>
@@ -198,11 +198,15 @@ if (window.tailwind) tailwind.config = {
 <!-- ============ リマインド文モーダル ============ -->
 <div id="modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background:rgba(0,0,0,.5)">
   <div class="card-surface border rounded-2xl w-full max-w-2xl max-h-[86vh] flex flex-col">
-    <div class="p-4 border-b hair flex items-center gap-3">
+    <div class="p-4 border-b hair flex flex-wrap items-center gap-3">
       <h2 class="font-bold">リマインド文</h2>
-      <select id="mOwner" class="card-surface border rounded-lg px-3 py-1.5 text-sm ml-auto"></select>
+      <label class="text-xs ink-2 ml-auto flex items-center gap-1.5">
+        基準日
+        <input id="mBaseDate" type="date" class="card-surface border rounded-lg px-2 py-1.5 text-sm tnum">
+      </label>
       <button id="mClose" type="button" class="ink-2 px-2 text-xl leading-none hover:opacity-70" aria-label="閉じる">×</button>
     </div>
+    <p class="px-4 text-[11px] ink-3">基準日から16日先までの案件を、投稿日の早い順にまとめます。</p>
     <textarea id="mText" class="flex-1 m-4 card-surface border rounded-lg p-3 text-sm font-mono leading-relaxed resize-none" rows="14"></textarea>
     <div class="px-4 pb-4 flex gap-2">
       <button id="mCopy" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">クリップボードにコピー</button>
@@ -391,6 +395,7 @@ function parseMeta(str){
       .replace(/^[\s　]+/, '')
       .split(/[\s　\t]/)[0]
       .replace(/[（(].*$/, '')
+      .replace(/★/g, '')                            // 先方確認ありの目印は名前から除く
       .trim();
     if (META_LABELS.includes(v)) v = '';
     const k = key[lm[1]];
@@ -415,20 +420,21 @@ function extractItems(rows, base){
         .map(c => String(c).trim())
         .filter(c => c && !HEADER_WORDS.includes(c) && c.length < 80)
         .join('／');
-      block = { name: COMPANY_OVERRIDES[name] || name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'' };
+      block = { name: COMPANY_OVERRIDES[name] || name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'', confirmMark:false };
       continue;
     }
     if (!block) continue;
 
     const joined = r.join(' ');
 
-    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊） */
+    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊）。「★」が入っていれば先方確認ありの目印 */
     if (/(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(joined)){
       const meta = parseMeta(joined);
       block.editor = block.editor || meta.editor;
       block.ope    = block.ope    || meta.ope;
       block.dir    = block.dir    || meta.dir;
       block.shoot  = block.shoot  || meta.shoot;
+      if (joined.includes('★')) block.confirmMark = true;
       if (!/\d+\s*月\s*\d+\s*日/.test(joined)) continue;
     }
 
@@ -460,7 +466,7 @@ function extractItems(rows, base){
       group: groupOf(status),
       date, dateRaw,
       author, editor: block.editor, ope: block.ope, dir: block.dir,
-      owner: block.editor || '担当未設定'
+      owner: block.editor || '担当未設定', confirmMark: block.confirmMark
     });
   }
   return { items, skipped };
@@ -477,13 +483,13 @@ async function syncData(){
   $('#syncStatus').textContent = '同期中…';
   $('#syncBtn').disabled = true;
   try {
-    const [sheetRes, configRes] = await Promise.all([
-      fetch('/api/sheet', { cache:'no-store' }),
-      fetch('/api/config', { cache:'no-store' })
-    ]);
+    const sheetRes = await fetch('/api/sheet', { cache:'no-store' });
     if (!sheetRes.ok) throw new Error(`HTTP ${sheetRes.status}`);
     RAW_TEXT = await sheetRes.text();
-    if (configRes.ok) ADMIN_CONFIG = await configRes.json();
+    try {
+      const configRes = await fetch('/api/config', { cache:'no-store', signal: AbortSignal.timeout(5000) });
+      if (configRes.ok) ADMIN_CONFIG = await configRes.json();
+    } catch (e) { /* 設定の取得に失敗しても本体の同期は続行する */ }
     const now = new Date();
     $('#syncStatus').textContent =
       `最終同期：${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -543,6 +549,7 @@ const URG = {
   u30 :{ label:'それ以降',   icon:'○', cls:'u-30',    stripe:'stripe-30'  }
 };
 const fmtDate = d => `${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})`;
+const fmtDateLong = d => `${d.getMonth()+1}月${d.getDate()}日(${DOW[d.getDay()]})`;
 const fmtDiff = n => n < 0 ? `${-n}日超過` : n === 0 ? '本日' : `あと${n}日`;
 
 function buildFilters(){
@@ -554,9 +561,6 @@ function buildFilters(){
   };
   fill($('#fOwner'),  [...new Set(ALL.map(i => i.owner))].sort(), '担当者');
   fill($('#fStatus'), [...new Set(ALL.map(i => i.group))].sort(), 'ステータス');
-  const m = $('#mOwner');
-  m.innerHTML = `<option value="__all">全担当者ぶんをまとめて</option>` +
-    [...new Set(ALL.map(i => i.owner))].sort().map(v => `<option value="${esc(v)}">${esc(v)} さん宛</option>`).join('');
 }
 
 function filtered(){
@@ -575,15 +579,17 @@ function filtered(){
   return list;
 }
 
-function bars(target, pairs){
+function bars(target, pairs, large){
   const max = Math.max(1, ...pairs.map(p => p[1]));
+  const textCls = large ? 'text-base' : 'text-xs';
+  const barH = large ? 'h-5' : 'h-4';
   target.innerHTML = pairs.map(([k, v]) => `
     <div class="flex items-center gap-3">
-      <div class="w-28 shrink-0 text-xs ink-2 text-right truncate" title="${esc(k)}">${esc(k)}</div>
-      <div class="flex-1 h-4 bar-track rounded-sm overflow-hidden">
+      <div class="w-28 shrink-0 ${textCls} ink-2 text-right truncate" title="${esc(k)}">${esc(k)}</div>
+      <div class="flex-1 ${barH} bar-track rounded-sm overflow-hidden">
         <div class="h-full bar-fill" style="width:${Math.max(2, v / max * 100)}%"></div>
       </div>
-      <div class="w-9 shrink-0 text-xs font-bold tnum text-right">${v}</div>
+      <div class="w-9 shrink-0 ${textCls} font-bold tnum text-right">${v}</div>
     </div>`).join('');
 }
 
@@ -613,7 +619,7 @@ function render(){
     src.forEach(i => m.set(i[key], (m.get(i[key]) || 0) + 1));
     return [...m.entries()].sort((a,b) => b[1] - a[1]);
   };
-  bars($('#chartStatus'), count('group'));
+  bars($('#chartStatus'), count('group'), true);
   bars($('#chartOwner'),  count('owner', i => i.diff <= 14 && (i.group === '未作成' || i.group === '作成中')).slice(0, 10));
 
   /* カード（同じ企業は1枠にまとめる。枠内の並び順は一覧の並び順を維持） */
@@ -661,25 +667,60 @@ function render(){
 /* =========================================================
    7. リマインド文
    ========================================================= */
-function reminderFor(owner){
-  const list = ALL.filter(i => i.owner === owner && isReminderTarget(i)).sort((a,b) => a.date - b.date);
-  if (!list.length) return '';
-  const byCompany = new Map();
-  list.forEach(i => {
-    if (!byCompany.has(i.company)) byCompany.set(i.company, { company: i.company, items: [] });
-    byCompany.get(i.company).items.push(i);
-  });
-  const body = [...byCompany.values()]
-    .map(({ company, items }) => `⭐️${company}（${items.length}件）\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
-    .join('\n\n\n');
-  return `【担当：${owner}】\n\n${body}`;
+const REMINDER_RANGE_DAYS = 16;
+
+function reminderBaseDate(){
+  const v = $('#mBaseDate').value;
+  if (!v) return baseDate();
+  const [y,m,d] = v.split('-').map(Number);
+  return new Date(y, m-1, d);
 }
+
+/* 今週（月曜始まり）＋来週の範囲。この範囲の投稿日には💡を付ける */
+function lightbulbRange(base){
+  const daysSinceMonday = (base.getDay() + 6) % 7;
+  const monday = new Date(base); monday.setDate(base.getDate() - daysSinceMonday);
+  const nextSunday = new Date(monday); nextSunday.setDate(monday.getDate() + 13);
+  return { start: monday, end: nextSunday };
+}
+
 function buildReminder(){
-  const v = $('#mOwner').value;
-  $('#mText').value = v === '__all'
-    ? [...new Set(ALL.map(i => i.owner))].sort()
-        .map(o => reminderFor(o)).filter(Boolean).join('\n\n' + '─'.repeat(28) + '\n\n')
-    : reminderFor(v);
+  if (!RAW_TEXT){ $('#mText').value = ''; return; }
+  const base = reminderBaseDate();
+  const { items } = extractItems(parseDelimited(RAW_TEXT), base);
+  const { start, end } = lightbulbRange(base);
+
+  const list = items.filter(it => {
+    if (ADMIN_CONFIG.pausedCompanies.includes(it.company)) return false;
+    if (ADMIN_CONFIG.excludeKeywords.some(k => k && it.company.includes(k))) return false;
+    const diff = Math.round((it.date - base) / 86400000);
+    if (diff < 0 || diff > REMINDER_RANGE_DAYS) return false;
+    if (isDone(it.status)) return false;
+    if (!isReminderTarget(it)) return false;
+    return true;
+  }).sort((a,b) => a.date - b.date);
+
+  const groups = [];
+  const idx = new Map();
+  list.forEach(i => {
+    if (!idx.has(i.company)) { idx.set(i.company, groups.length); groups.push({ company: i.company, items: [] }); }
+    groups[idx.get(i.company)].items.push(i);
+  });
+
+  const body = groups.map(({ company, items: gItems }) => {
+    const owners = new Set(gItems.map(i => i.owner).filter(v => v && v !== '担当未設定'));
+    const headerOwner = owners.size === 1 ? [...owners][0] : '';
+    const confirmMark = gItems.some(i => i.confirmMark);
+    const lines = gItems.map(i => {
+      const inWeek = i.date >= start && i.date <= end;
+      const authorPart = (i.author && i.author !== i.owner) ? ` ${i.author}` : '';
+      const statusPart = i.status.trim();
+      return `${fmtDateLong(i.date)}${inWeek ? '💡' : ''}${authorPart}${statusPart}`;
+    });
+    return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
+  }).join('\n\n');
+
+  $('#mText').value = body;
 }
 async function copyText(t){
   try { await navigator.clipboard.writeText(t); return true; } catch(e){}
@@ -717,8 +758,12 @@ $('#doneList').addEventListener('input', runExtract);
 $('#csvBtn').onclick    = exportCSV;
 syncData();
 
-$('#remindBtn').onclick = () => { buildReminder(); $('#modal').classList.remove('hidden'); $('#modal').classList.add('flex'); };
-$('#mOwner').onchange   = buildReminder;
+$('#remindBtn').onclick = () => {
+  if (!$('#mBaseDate').value) $('#mBaseDate').value = $('#baseDate').value;
+  buildReminder();
+  $('#modal').classList.remove('hidden'); $('#modal').classList.add('flex');
+};
+$('#mBaseDate').addEventListener('input', buildReminder);
 $('#mClose').onclick    = () => { $('#modal').classList.add('hidden'); $('#modal').classList.remove('flex'); $('#mMsg').textContent=''; };
 $('#modal').onclick     = e => { if (e.target === $('#modal')) $('#mClose').click(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) $('#mClose').click(); });
