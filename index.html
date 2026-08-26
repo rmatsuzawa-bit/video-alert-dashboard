@@ -329,6 +329,14 @@ function doneTerms(){
 /* カード・リマインド文でも企業名が同じでもまとめず個別扱いにするタイトル */
 const NO_GROUP = ['冴えたいこやくん／リアルクエスト～本日の依頼～'];
 
+/* NO_GROUP対象は「／」区切りを会社名／サブタイトルの2行に分けて表示する */
+function splitCompanyDisplay(company){
+  if (!NO_GROUP.includes(company)) return { title: company, subtitle: '' };
+  const idx = company.indexOf('／');
+  if (idx === -1) return { title: company, subtitle: '' };
+  return { title: company.slice(0, idx), subtitle: company.slice(idx + 1) };
+}
+
 /* リマインド文からは確認待ち系（P/D/QA確認待ち）と確認済みの案件は除く */
 function isReminderTarget(i){
   return i.group !== '確認待ち' && i.group !== 'QA確認依頼中' && !i.statusRaw.includes('確認済み');
@@ -586,6 +594,7 @@ function render(){
   $('#cards').innerHTML = groups.map(({ company, items }) => {
     const u = URG[worstUrg(items)];
     const first = items[0];
+    const { title, subtitle } = splitCompanyDisplay(company);
     return `
     <article class="card-surface border rounded-xl p-4 relative overflow-hidden">
       <div class="absolute inset-y-0 left-0 w-1 ${u.stripe}"></div>
@@ -593,7 +602,8 @@ function render(){
         <span class="text-[11px] font-bold px-2 py-0.5 rounded ${u.cls}">${u.icon} ${u.label}</span>
         <span class="text-xs ink-3 ml-auto">${items.length} 件</span>
       </div>
-      <h3 class="font-bold text-[15px] leading-snug">${esc(company)}</h3>
+      <h3 class="font-bold text-[15px] leading-snug">${esc(title)}</h3>
+      ${subtitle ? `<p class="text-xs ink-2 mt-0.5 leading-snug">${esc(subtitle)}</p>` : ''}
       <div class="mt-2.5 space-y-1.5">
         ${items.map(i => `
         <div class="flex items-start gap-2 text-xs">
@@ -625,7 +635,10 @@ function reminderFor(owner){
     byCompany.get(key).items.push(i);
   });
   const body = [...byCompany.values()]
-    .map(({ company, items }) => `⭐️${company}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`)
+    .map(({ company, items }) => {
+      const { title, subtitle } = splitCompanyDisplay(company);
+      return `⭐️${title}${subtitle ? '\n' + subtitle : ''}\n\n${items.map(i => fmtDate(i.date)).join('\n')}`;
+    })
     .join('\n\n\n');
   return `【担当：${owner}】\n\n${body}`;
 }
