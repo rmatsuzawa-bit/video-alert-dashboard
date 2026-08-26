@@ -337,6 +337,11 @@ function isReminderTarget(i){
 const HEADER_WORDS = ['端末','投稿日','作成者','CT','テキストサイズ','備考','インスタ','TikTok','YouTube','RED','TOPに戻る','色・フォント','TRUE','FALSE','状態'];
 const META_LABELS  = ['基本編集','撮影','運用','P','D'];
 
+/* ヘッダー行のセル結合だと不自然な名前になる行の個別補正（「／」でつないだ名前 → 差し替え後の名前） */
+const COMPANY_OVERRIDES = {
+  '冴えたいこやくん／リアルクエスト～本日の依頼～': 'リアルクエスト～本日の依頼～'
+};
+
 /* 「撮影＊さとあや　運用＊みえ　P＊れん」のような担当メモ行を分解する。
    ラベルだけで値が空の場合（例：運用＊　D＊れん）は空として扱う。 */
 function parseMeta(str){
@@ -375,7 +380,7 @@ function extractItems(rows, base){
         .map(c => String(c).trim())
         .filter(c => c && !HEADER_WORDS.includes(c) && c.length < 80)
         .join('／');
-      block = { name: name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'' };
+      block = { name: COMPANY_OVERRIDES[name] || name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'' };
       continue;
     }
     if (!block) continue;
