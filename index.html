@@ -770,7 +770,11 @@ function buildReminder(){
       const inWeek = i.date >= week.start && i.date <= week.end;
       const authorPart = (i.author && i.author !== i.owner) ? ` ${i.author}` : '';
       const statusPart = i.status.trim();
-      return `${fmtDateLong(i.date)}${inWeek ? '(lightbulb)' : ''}${authorPart}${statusPart}`;
+      const tail = `${authorPart}${statusPart}`;
+      /* ChatWorkの絵文字変換（(lightbulb)）は前後に文字がくっつくと認識されないため、前後にスペースを入れて独立させる */
+      return inWeek
+        ? `${fmtDateLong(i.date)} (lightbulb)${tail ? ' ' + tail.trimStart() : ''}`
+        : `${fmtDateLong(i.date)}${tail}`;
     });
     return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
   }).join('\n\n');
