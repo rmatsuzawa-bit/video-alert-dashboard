@@ -776,7 +776,7 @@ function buildReminder(){
         ? `${fmtDateLong(i.date)} (lightbulb)${tail ? ' ' + tail.trimStart() : ''}`
         : `${fmtDateLong(i.date)}${tail}`;
     });
-    return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
+    return `${confirmMark ? '⭐️' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
   }).join('\n\n');
 
   $('#mText').value = body;
