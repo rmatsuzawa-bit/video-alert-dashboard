@@ -430,7 +430,7 @@ function parseMeta(str){
 
 function extractItems(rows, base){
   const items = [];
-  let block = null, skipped = 0;
+  let block = null, skipped = 0, blockOrder = 0;
 
   const isHeader = r => r.some(c => String(c).trim() === '投稿日');
 
@@ -444,21 +444,23 @@ function extractItems(rows, base){
         .map(c => String(c).trim())
         .filter(c => c && !HEADER_WORDS.includes(c) && c.length < 80)
         .join('／');
-      block = { name: COMPANY_OVERRIDES[name] || name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'', confirmMark:false };
+      block = { name: COMPANY_OVERRIDES[name] || name || '（名称不明）', iDate, iStatus, iAuthor, editor:'', ope:'', dir:'', shoot:'', confirmMark:false, order: blockOrder++ };
       continue;
     }
     if (!block) continue;
 
     const joined = r.join(' ');
 
-    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊）。「★」が入っていれば先方確認ありの目印 */
+    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊）。同じセル内に「★」が入っていれば先方確認ありの目印
+       （行全体だと無関係なメモ欄の★まで拾ってしまうため、メタ情報のあるセルだけを見る） */
     if (/(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(joined)){
       const meta = parseMeta(joined);
       block.editor = block.editor || meta.editor;
       block.ope    = block.ope    || meta.ope;
       block.dir    = block.dir    || meta.dir;
       block.shoot  = block.shoot  || meta.shoot;
-      if (joined.includes('★')) block.confirmMark = true;
+      const metaCell = r.find(c => /(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(String(c)));
+      if (metaCell && String(metaCell).includes('★')) block.confirmMark = true;
       if (!/\d+\s*月\s*\d+\s*日/.test(joined)) continue;
     }
 
@@ -490,7 +492,7 @@ function extractItems(rows, base){
       group: groupOf(status),
       date, dateRaw,
       author, editor: block.editor, ope: block.ope, dir: block.dir,
-      owner: block.editor || '担当未設定', confirmMark: block.confirmMark
+      owner: block.editor || '担当未設定', confirmMark: block.confirmMark, sheetOrder: block.order
     });
   }
   return { items, skipped };
@@ -747,7 +749,7 @@ function buildReminder(){
     if (isDone(it.status)) return false;
     if (!isReminderTarget(it)) return false;
     return true;
-  }).sort((a,b) => a.date - b.date);
+  }).sort((a,b) => a.sheetOrder - b.sheetOrder);
 
   const groups = [];
   const idx = new Map();
@@ -755,16 +757,20 @@ function buildReminder(){
     if (!idx.has(i.company)) { idx.set(i.company, groups.length); groups.push({ company: i.company, items: [] }); }
     groups[idx.get(i.company)].items.push(i);
   });
+  /* 進捗シートの登場順を保ちつつ、企業（クライアント）を先に・自社アカウントを後に */
+  const clientGroups = groups.filter(g => !IN_HOUSE_COMPANIES.has(g.company));
+  const inHouseGroups = groups.filter(g => IN_HOUSE_COMPANIES.has(g.company));
+  const orderedGroups = [...clientGroups, ...inHouseGroups];
 
-  const body = groups.map(({ company, items: gItems }) => {
+  const body = orderedGroups.map(({ company, items: gItems }) => {
     const owners = new Set(gItems.map(i => i.owner).filter(v => v && v !== '担当未設定'));
     const headerOwner = owners.size === 1 ? [...owners][0] : '';
     const confirmMark = gItems.some(i => i.confirmMark);
-    const lines = gItems.map(i => {
+    const lines = [...gItems].sort((a,b) => a.date - b.date).map(i => {
       const inWeek = i.date >= week.start && i.date <= week.end;
       const authorPart = (i.author && i.author !== i.owner) ? ` ${i.author}` : '';
       const statusPart = i.status.trim();
-      return `${fmtDateLong(i.date)}${inWeek ? '💡' : ''}${authorPart}${statusPart}`;
+      return `${fmtDateLong(i.date)}${inWeek ? '(lightbulb)' : ''}${authorPart}${statusPart}`;
     });
     return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
   }).join('\n\n');
