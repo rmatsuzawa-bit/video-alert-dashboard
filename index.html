@@ -419,7 +419,7 @@ function parseMeta(str){
       .replace(/^[\s　]+/, '')
       .split(/[\s　\t]/)[0]
       .replace(/[（(].*$/, '')
-      .replace(/★/g, '')                            // 先方確認ありの目印は名前から除く
+      .replace(/[★⭐️]/g, '')                     // 先方確認ありの目印（異体字セレクタ含む）は名前から除く
       .trim();
     if (META_LABELS.includes(v)) v = '';
     const k = key[lm[1]];
@@ -451,7 +451,7 @@ function extractItems(rows, base){
 
     const joined = r.join(' ');
 
-    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊）。同じセル内に「★」が入っていれば先方確認ありの目印
+    /* 担当メタ行（基本編集＊/撮影＊/運用＊/P＊/D＊）。同じセル内に「★」か「⭐️」が入っていれば先方確認ありの目印
        （行全体だと無関係なメモ欄の★まで拾ってしまうため、メタ情報のあるセルだけを見る） */
     if (/(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(joined)){
       const meta = parseMeta(joined);
@@ -460,7 +460,7 @@ function extractItems(rows, base){
       block.dir    = block.dir    || meta.dir;
       block.shoot  = block.shoot  || meta.shoot;
       const metaCell = r.find(c => /(基本編集|撮影|運用|[PD])[\s　]*[＊*※]/.test(String(c)));
-      if (metaCell && String(metaCell).includes('★')) block.confirmMark = true;
+      if (metaCell && /[★⭐]/.test(String(metaCell))) block.confirmMark = true;
       if (!/\d+\s*月\s*\d+\s*日/.test(joined)) continue;
     }
 
@@ -776,7 +776,7 @@ function buildReminder(){
         ? `${fmtDateLong(i.date)} (lightbulb)${tail ? ' ' + tail.trimStart() : ''}`
         : `${fmtDateLong(i.date)}${tail}`;
     });
-    return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
+    return `${confirmMark ? '⭐️' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
   }).join('\n\n');
 
   $('#mText').value = body;
