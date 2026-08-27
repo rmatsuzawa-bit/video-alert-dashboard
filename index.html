@@ -503,7 +503,7 @@ function extractItems(rows, base){
    ========================================================= */
 let ALL = [];
 let RAW_TEXT = '';
-let ADMIN_CONFIG = { pausedCompanies: [], excludeKeywords: [] };
+let ADMIN_CONFIG = { pausedCompanies: [], excludeKeywords: [], confirmCompanies: [] };
 
 async function syncData(){
   $('#syncStatus').textContent = '同期中…';
@@ -765,7 +765,7 @@ function buildReminder(){
   const body = orderedGroups.map(({ company, items: gItems }) => {
     const owners = new Set(gItems.map(i => i.owner).filter(v => v && v !== '担当未設定'));
     const headerOwner = owners.size === 1 ? [...owners][0] : '';
-    const confirmMark = gItems.some(i => i.confirmMark);
+    const confirmMark = gItems.some(i => i.confirmMark) || (ADMIN_CONFIG.confirmCompanies || []).includes(company);
     const lines = [...gItems].sort((a,b) => a.date - b.date).map(i => {
       const inWeek = i.date >= week.start && i.date <= week.end;
       const authorPart = (i.author && i.author !== i.owner) ? ` ${i.author}` : '';

@@ -1,7 +1,7 @@
 const { put } = require('@vercel/blob');
 
 const PATHNAME = 'config.json';
-const DEFAULT_CONFIG = { pausedCompanies: [], excludeKeywords: ['切り抜き', '横型'] };
+const DEFAULT_CONFIG = { pausedCompanies: [], excludeKeywords: ['切り抜き', '横型'], confirmCompanies: [] };
 
 /* @vercel/blob の list()/get() がこの実行環境で応答しないため、
    読み取り専用トークンからストアIDを取り出し、ブロブの固定URLへ直接アクセスする */
@@ -19,7 +19,7 @@ async function readConfig() {
     cache: 'no-store'
   }).catch(() => null);
   if (!res || !res.ok) return DEFAULT_CONFIG;
-  try { return await res.json(); } catch { return DEFAULT_CONFIG; }
+  try { return { ...DEFAULT_CONFIG, ...(await res.json()) }; } catch { return DEFAULT_CONFIG; }
 }
 
 module.exports = async (req, res) => {
@@ -46,7 +46,8 @@ module.exports = async (req, res) => {
     }
     const config = {
       pausedCompanies: Array.isArray(parsed.pausedCompanies) ? parsed.pausedCompanies.map(String) : [],
-      excludeKeywords: Array.isArray(parsed.excludeKeywords) ? parsed.excludeKeywords.map(String) : []
+      excludeKeywords: Array.isArray(parsed.excludeKeywords) ? parsed.excludeKeywords.map(String) : [],
+      confirmCompanies: Array.isArray(parsed.confirmCompanies) ? parsed.confirmCompanies.map(String) : []
     };
     await put(PATHNAME, JSON.stringify(config), {
       access: 'private',
