@@ -126,7 +126,7 @@ if (window.tailwind) tailwind.config = {
         <input id="incOverdue" type="checkbox" checked class="rounded"><span>期限超過（過去30日）も含める</span>
       </label>
       <label class="flex items-center gap-1.5">
-        <input id="dirDone" type="checkbox" class="rounded"><span>「ディレクター送信済み」を完了とみなす</span>
+        <input id="dirDone" type="checkbox" checked class="rounded"><span>「ディレクター送信済み」を完了とみなす</span>
       </label>
       <label class="flex items-center gap-1.5">
         <input id="incBlank" type="checkbox" checked class="rounded"><span>ステータス空欄を「未作成」として扱う</span>
@@ -776,7 +776,7 @@ function buildReminder(){
         ? `${fmtDateLong(i.date)} (lightbulb)${tail ? ' ' + tail.trimStart() : ''}`
         : `${fmtDateLong(i.date)}${tail}`;
     });
-    return `${confirmMark ? '⭐️' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
+    return `${confirmMark ? '(*)' : ''}${company}${headerOwner ? ' ' + headerOwner : ''}\n${lines.join('\n')}`;
   }).join('\n\n');
 
   $('#mText').value = body;
