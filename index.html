@@ -271,6 +271,18 @@ function baseDate(){
   return new Date(y, m-1, d);
 }
 
+/* その週の月曜日（週の途中で日付を跨いでも、月曜になるまで指定日が変わらないようにする基準） */
+function mondayOf(date){
+  const daysSinceMonday = (date.getDay() + 6) % 7;
+  const monday = new Date(date); monday.setDate(date.getDate() - daysSinceMonday);
+  return monday;
+}
+/* 「N週間後まで」＝月曜始まりでN週間後の週の金曜日 */
+function weeksAheadFriday(base, n){
+  const d = mondayOf(base); d.setDate(d.getDate() + 7*n + 4);
+  return d;
+}
+
 /* =========================================================
    1. TSV / CSV パーサ（引用符・セル内改行に対応）
    ========================================================= */
@@ -532,7 +544,7 @@ function runExtract(){
   const base = baseDate();
 
   const { items, skipped } = extractItems(parseDelimited(RAW_TEXT), base);
-  const rangeEnd = readDateInput('#rangeEnd', (() => { const d = new Date(base); d.setDate(d.getDate() + 16); return d; })());
+  const rangeEnd = readDateInput('#rangeEnd', weeksAheadFriday(base, 2));
   const range = Math.round((rangeEnd - base) / 86400000);
   const past  = $('#incOverdue').checked ? 30 : 0;
 
@@ -703,7 +715,7 @@ function readDateInput(id, fallback){
 function reminderStartDate(){ return readDateInput('#mStartDate', baseDate()); }
 function reminderEndDate(){
   const start = reminderStartDate();
-  const fallback = new Date(start); fallback.setDate(start.getDate() + 16);
+  const fallback = weeksAheadFriday(start, 2);
   return readDateInput('#mEndDate', fallback);
 }
 
@@ -722,6 +734,10 @@ function applyPreset(kind){
     end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
   } else if (kind === 'nextMonth'){
     end = new Date(start.getFullYear(), start.getMonth() + 2, 0);
+  } else if (kind === '7'){
+    end = weeksAheadFriday(start, 1);
+  } else if (kind === '16'){
+    end = weeksAheadFriday(start, 2);
   } else {
     end = new Date(start); end.setDate(start.getDate() + Number(kind));
   }
@@ -816,6 +832,10 @@ function applyRangePreset(kind){
     end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
   } else if (kind === 'nextMonth'){
     end = new Date(base.getFullYear(), base.getMonth() + 2, 0);
+  } else if (kind === '7'){
+    end = weeksAheadFriday(base, 1);
+  } else if (kind === '16'){
+    end = weeksAheadFriday(base, 2);
   } else {
     end = new Date(base); end.setDate(base.getDate() + Number(kind));
   }
