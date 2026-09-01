@@ -94,6 +94,37 @@ if (window.tailwind) tailwind.config = {
     </div>
   </header>
 
+  <!-- ============ フィルター ============ -->
+  <section class="mt-4 sticky top-0 z-20 py-3" style="background:var(--plane)">
+    <div class="card-surface border rounded-xl p-3 flex flex-wrap items-center gap-2">
+      <input id="fText" type="search" placeholder="企業名・コンテンツ名で検索"
+        class="card-surface border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]">
+      <label class="flex items-center gap-1.5 text-sm ink-2 px-1">
+        <input id="fInHouse" type="checkbox" class="rounded"><span>自社のみ</span>
+      </label>
+      <select id="fOwner"  class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">担当者：すべて</option></select>
+      <select id="fStatus" class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">ステータス：すべて</option></select>
+      <select id="fUrg"    class="card-surface border rounded-lg px-3 py-2 text-sm">
+        <option value="">緊急度：すべて</option>
+        <option value="over">期限超過</option>
+        <option value="u3">3日以内</option>
+        <option value="u7">1週間以内</option>
+        <option value="u14">2週間以内</option>
+        <option value="u30">それ以降</option>
+      </select>
+      <select id="fSort" class="card-surface border rounded-lg px-3 py-2 text-sm">
+        <option value="date">投稿日順</option>
+        <option value="owner">担当者順</option>
+        <option value="company">企業名順</option>
+      </select>
+      <div class="ml-auto flex gap-2">
+        <button id="remindBtn" type="button" class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">リマインド文を作成</button>
+        <button id="csvBtn" type="button" class="px-3 py-2 rounded-lg text-sm border hair ink-2 hover:opacity-70">CSV書き出し</button>
+      </div>
+    </div>
+    <p id="filterNote" class="text-xs ink-3 mt-2 px-1"></p>
+  </section>
+
   <!-- ============ 同期エリア ============ -->
   <section id="inputSection" class="mt-6 card-surface border rounded-xl p-4 sm:p-5">
     <div class="flex flex-wrap items-center gap-3 mb-3">
@@ -165,37 +196,6 @@ if (window.tailwind) tailwind.config = {
         <p class="text-[11px] ink-3 mb-3">投稿日まで2週間以内・未作成／作成中のみ・件数の多い順・上位10名</p>
         <div id="chartOwner" class="space-y-2"></div>
       </div>
-    </section>
-
-    <!-- フィルター -->
-    <section class="mt-6 sticky top-0 z-20 py-3" style="background:var(--plane)">
-      <div class="card-surface border rounded-xl p-3 flex flex-wrap items-center gap-2">
-        <input id="fText" type="search" placeholder="企業名・コンテンツ名で検索"
-          class="card-surface border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]">
-        <label class="flex items-center gap-1.5 text-sm ink-2 px-1">
-          <input id="fInHouse" type="checkbox" class="rounded"><span>自社のみ</span>
-        </label>
-        <select id="fOwner"  class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">担当者：すべて</option></select>
-        <select id="fStatus" class="card-surface border rounded-lg px-3 py-2 text-sm"><option value="">ステータス：すべて</option></select>
-        <select id="fUrg"    class="card-surface border rounded-lg px-3 py-2 text-sm">
-          <option value="">緊急度：すべて</option>
-          <option value="over">期限超過</option>
-          <option value="u3">3日以内</option>
-          <option value="u7">1週間以内</option>
-          <option value="u14">2週間以内</option>
-          <option value="u30">それ以降</option>
-        </select>
-        <select id="fSort" class="card-surface border rounded-lg px-3 py-2 text-sm">
-          <option value="date">投稿日順</option>
-          <option value="owner">担当者順</option>
-          <option value="company">企業名順</option>
-        </select>
-        <div class="ml-auto flex gap-2">
-          <button id="remindBtn" type="button" class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--bar)">リマインド文を作成</button>
-          <button id="csvBtn" type="button" class="px-3 py-2 rounded-lg text-sm border hair ink-2 hover:opacity-70">CSV書き出し</button>
-        </div>
-      </div>
-      <p id="filterNote" class="text-xs ink-3 mt-2 px-1"></p>
     </section>
 
     <!-- カード -->
