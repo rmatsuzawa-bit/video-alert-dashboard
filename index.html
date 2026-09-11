@@ -371,9 +371,9 @@ function doneTerms(){
   return base;
 }
 
-/* リマインド文の対象は「未作成」「作成中」のみ */
+/* リマインド文の対象は「未作成」「作成中」「素材待ち」（素材作成中・先方素材待ちを含む） */
 function isReminderTarget(i){
-  return i.group === '未作成' || i.group === '作成中';
+  return i.group === '未作成' || i.group === '作成中' || i.group === '素材待ち';
 }
 
 /* =========================================================
